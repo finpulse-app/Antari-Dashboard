@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antari — Distributor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --red: #D64541;
+    --blue: #1B3A7A;
+    --gold: #B8791E;
+    --cream: #FFF8EE;
+    --dark: #2B2118;
+    --line: #D9CBB2;
+    --muted: #7A6F60;
+    --card-bg: #FFFFFF;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cream: #1C1712; --dark: #F3ECE0; --line: #3A3226; --muted: #B7A992; --card-bg: #24201A;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--cream); color: var(--dark);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .flag-stripe { height: 6px; display: flex; }
+  .flag-stripe div { flex: 1; }
+  .flag-stripe .r { background: var(--red); }
+  .flag-stripe .b { background: var(--blue); }
+  .flag-stripe .o { background: var(--gold); }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  .wordmark {
+    font-family: Georgia, serif; font-weight: 700;
+    font-size: clamp(28px, 6vw, 38px); color: var(--red);
+    letter-spacing: 0.02em; margin: 0;
+  }
+  .tagline { font-family: Georgia, serif; font-style: italic; font-size: 13px; color: var(--blue); margin: 2px 0; }
+
+  /* KPI strip */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .kpi {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .kpi .val { font-family: Georgia, serif; font-weight: 700; font-size: 22px; }
+  .kpi .lbl { font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: 0.02em; }
+  .kpi.total .val { color: var(--dark); font-size: 26px; }
+  .kpi.wholesale .val { color: var(--blue); }
+  .kpi.direct .val { color: var(--gold); }
+  .kpi.ar .val { color: var(--red); }
+  .kpi.other .val { color: var(--muted); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .tab {
+    padding: 10px 16px; font-size: 14px; font-weight: 600; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent; user-select: none;
+  }
+  .tab.active { color: var(--red); border-bottom-color: var(--red); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Tile grids */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .tile {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    position: relative;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(43,33,24,0.12); }
+  .tile.zero { opacity: 0.45; cursor: default; }
+  .tile.zero:hover { transform: none; box-shadow: none; }
+  .tile .rank {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 10px; font-weight: 700; color: var(--gold);
+  }
+  .tile .name { font-weight: 600; font-size: 13.5px; margin: 0 0 6px; padding-right: 22px; line-height: 1.25; }
+  .tile .revenue { font-family: Georgia, serif; font-weight: 700; font-size: 18px; color: var(--dark); }
+  .tile .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tile .owes {
+    display: inline-block; margin-top: 8px; font-size: 10.5px; font-weight: 700;
+    color: var(--red); background: rgba(214,69,65,0.1); padding: 2px 7px; border-radius: 20px;
+  }
+
+  /* Product tiles (no click) */
+  .tile.product { cursor: default; }
+  .tile.product:hover { transform: none; box-shadow: none; }
+
+  /* Modal */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(43,33,24,0.45);
+    z-index: 50; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--card-bg); border-radius: 14px; padding: 26px;
+    max-width: 380px; width: 100%; border: 1px solid var(--line);
+  }
+  .modal h3 { font-family: Georgia, serif; font-size: 20px; margin: 0 0 4px; color: var(--dark); }
+  .modal .modal-rank { font-size: 12px; color: var(--gold); font-weight: 700; margin-bottom: 16px; }
+  .modal-row {
+    display: flex; justify-content: space-between; padding: 9px 0;
+    border-bottom: 1px solid var(--line); font-size: 14px;
+  }
+  .modal-row:last-child { border-bottom: none; }
+  .modal-row .k { color: var(--muted); }
+  .modal-row .v { font-weight: 600; }
+  .modal-row .v.red { color: var(--red); }
+  .modal-close {
+    margin-top: 18px; width: 100%; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: transparent; color: var(--dark);
+    font-size: 14px; cursor: pointer;
+  }
+
+  h2.section-label {
+    font-family: Georgia, serif; font-size: 15px; color: var(--muted);
+    margin: 0 0 12px; font-weight: 400;
+  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+  .status { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+  footer {
+    text-align: center; font-size: 12px; color: var(--muted);
+    margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+<div class="flag-stripe"><div class="r"></div><div class="b"></div><div class="o"></div></div>
+
+<div class="wrap">
+  <header>
+    <p class="wordmark">ANTARI</p>
+    <p class="tagline">A Taste of Armenia — Distributor Dashboard</p>
+  </header>
+
+  <div id="status" class="status">Loading your numbers…</div>
+  <div id="content" style="display:none;">
+
+    <div class="kpi-row">
+      <div class="kpi total"><div class="val" id="kpi-total">—</div><div class="lbl">Total Revenue</div></div>
+      <div class="kpi wholesale"><div class="val" id="kpi-wholesale">—</div><div class="lbl">Wholesale</div></div>
+      <div class="kpi direct"><div class="val" id="kpi-direct">—</div><div class="lbl">Direct / Festival</div></div>
+      <div class="kpi ar"><div class="val" id="kpi-ar">—</div><div class="lbl">Outstanding (AR)</div></div>
+      <div class="kpi other"><div class="val" id="kpi-other">—</div><div class="lbl">Unmatched ("Other")</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="stores">Stores</div>
+      <div class="tab" data-tab="products">Products</div>
+      <div class="tab" data-tab="geo">Zip &amp; Routes</div>
+    </div>
+
+    <div class="panel active" id="panel-stores">
+      <h2 class="section-label">Tap a store for details — faded tiles have no sales yet this period.</h2>
+      <div class="tile-grid" id="store-tiles"></div>
+    </div>
+
+    <div class="panel" id="panel-products">
+      <h2 class="section-label">Wholesale product performance, ranked by revenue.</h2>
+      <div class="tile-grid" id="product-tiles"></div>
+    </div>
+
+    <div class="panel" id="panel-geo">
+      <div class="two-col">
+        <div>
+          <h2 class="section-label">Zip Code Ranking</h2>
+          <div class="tile-grid" id="zip-tiles"></div>
+        </div>
+        <div>
+          <h2 class="section-label">Delivery Routes</h2>
+          <div class="tile-grid" id="route-tiles"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Antari NYC · data refreshes on page load</footer>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-rank" id="modal-rank"></div>
+    <h3 id="modal-name"></h3>
+    <div class="modal-row"><span class="k">Revenue</span><span class="v" id="modal-revenue"></span></div>
+    <div class="modal-row"><span class="k">Invoices</span><span class="v" id="modal-invoices"></span></div>
+    <div class="modal-row"><span class="k">Last Payment</span><span class="v" id="modal-payment"></span></div>
+    <div class="modal-row"><span class="k">Zip</span><span class="v" id="modal-zip"></span></div>
+    <div class="modal-row"><span class="k">Delivery Route</span><span class="v" id="modal-route"></span></div>
+    <div class="modal-row" id="modal-ar-row" style="display:none;"><span class="k">Outstanding Balance</span><span class="v red" id="modal-ar"></span></div>
+    <button class="modal-close" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://hzufqpoauamlhkaoaacx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_1Rw5PxX0FCzqFwe4Qi-H-Q_xKystG52";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const fmt = n => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtCompact = n => {
+    const v = Number(n);
+    if (v >= 1000) return "$" + (v/1000).toFixed(1) + "k";
+    return fmt(v);
+  };
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No payments yet";
+
+  let storeData = [], zipData = [], routeData = [];
+
+  function ordinal(n) {
+    const s = ["th","st","nd","rd"], v = n % 100;
+    return n + (s[(v-20)%10] || s[v] || s[0]);
+  }
+
+  function openModal(store) {
+    document.getElementById("modal-rank").textContent = Number(store.total_revenue) > 0 ? ordinal(store.revenue_rank) + " by revenue" : "No sales yet";
+    document.getElementById("modal-name").textContent = store.store_name;
+    document.getElementById("modal-revenue").textContent = fmt(store.total_revenue);
+    document.getElementById("modal-invoices").textContent = store.invoices;
+    document.getElementById("modal-payment").textContent = fmtDate(store.last_payment_date);
+    document.getElementById("modal-zip").textContent = store.zip || "—";
+    document.getElementById("modal-route").textContent = store.delivery_route || "—";
+    const arRow = document.getElementById("modal-ar-row");
+    if (store.outstanding_balance && Number(store.outstanding_balance) > 0) {
+      arRow.style.display = "flex";
+      document.getElementById("modal-ar").textContent = fmt(store.outstanding_balance);
+    } else {
+      arRow.style.display = "none";
+    }
+    document.getElementById("modal-backdrop").classList.add("open");
+  }
+  function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+  document.getElementById("modal-backdrop").addEventListener("click", e => {
+    if (e.target.id === "modal-backdrop") closeModal();
+  });
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  async function load() {
+    try {
+      const [storeRank, prodRank, ar, zip, route, channel, other, stores] = await Promise.all([
+        sb.from("v_store_ranking").select("*").order("revenue_rank"),
+        sb.from("v_product_ranking").select("*").order("revenue_rank"),
+        sb.from("v_accounts_receivable").select("*"),
+        sb.from("v_zip_ranking").select("*").order("revenue_rank"),
+        sb.from("v_route_summary").select("*"),
+        sb.from("v_channel_summary").select("*"),
+        sb.from("v_other_bucket").select("*"),
+        sb.from("stores").select("store_name,zip,delivery_route"),
+      ]);
+      for (const r of [storeRank, prodRank, ar, zip, route, channel, other, stores]) {
+        if (r.error) throw r.error;
+      }
+
+      const wholesale = Number(channel.data.find(c => c.channel === "Wholesale")?.net_revenue || 0);
+      const direct = Number(channel.data.find(c => c.channel === "Direct / Festival")?.net_revenue || 0);
+      const arTotal = ar.data.reduce((s, r) => s + Number(r.outstanding_balance), 0);
+      const o = other.data[0] || { total_revenue: 0, invoices: 0 };
+
+      document.getElementById("kpi-total").textContent = fmtCompact(wholesale + direct);
+      document.getElementById("kpi-wholesale").textContent = fmtCompact(wholesale);
+      document.getElementById("kpi-direct").textContent = fmtCompact(direct);
+      document.getElementById("kpi-ar").textContent = fmtCompact(arTotal);
+      document.getElementById("kpi-other").textContent = fmtCompact(o.total_revenue);
+
+      // merge store ranking with zip/route + AR
+      const storeMeta = Object.fromEntries(stores.data.map(s => [s.store_name, s]));
+      const arMap = Object.fromEntries(ar.data.map(a => [a.store_name, a.outstanding_balance]));
+      storeData = storeRank.data.map(s => ({
+        ...s,
+        zip: storeMeta[s.store_name]?.zip,
+        delivery_route: storeMeta[s.store_name]?.delivery_route,
+        outstanding_balance: arMap[s.store_name] || 0,
+      }));
+
+      const storeTiles = document.getElementById("store-tiles");
+      storeTiles.innerHTML = storeData.map((s, i) => {
+        const zero = Number(s.total_revenue) === 0;
+        const owes = Number(s.outstanding_balance) > 0;
+        return `
+        <div class="tile ${zero ? 'zero' : ''}" onclick='openModal(storeData[${i}])'>
+          <div class="rank">${zero ? '' : '#' + s.revenue_rank}</div>
+          <p class="name">${s.store_name}</p>
+          <div class="revenue">${fmtCompact(s.total_revenue)}</div>
+          <div class="sub">${s.invoices} invoice${s.invoices === 1 ? '' : 's'}</div>
+          ${owes ? `<div class="owes">Owes ${fmt(s.outstanding_balance)}</div>` : ''}
+        </div>`;
+      }).join("");
+
+      document.getElementById("product-tiles").innerHTML = prodRank.data.map(p => `
+        <div class="tile product">
+          <div class="rank">#${p.revenue_rank}</div>
+          <p class="name">${p.item_name}</p>
+          <div class="revenue">${fmtCompact(p.total_revenue)}</div>
+          <div class="sub">${Number(p.units_sold).toLocaleString()} units</div>
+        </div>`).join("");
+
+      document.getElementById("zip-tiles").innerHTML = zip.data.map(z => `
+        <div class="tile product">
+          <div class="rank">#${z.revenue_rank}</div>
+          <p class="name">${z.zip}</p>
+          <div class="revenue">${fmtCompact(z.total_revenue)}</div>
+        </div>`).join("");
+
+      document.getElementById("route-tiles").innerHTML = route.data.map(r => `
+        <div class="tile product">
+          <p class="name">${r.delivery_route}</p>
+          <div class="revenue">${fmtCompact(r.total_revenue)}</div>
+          <div class="sub">${r.stores_on_route} stores</div>
+        </div>`).join("");
+
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "block";
+    } catch (err) {
+      document.getElementById("status").innerHTML =
+        "Couldn't load data: " + (err.message || "unknown error") + ". Check your Supabase connection.";
+      console.error(err);
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
