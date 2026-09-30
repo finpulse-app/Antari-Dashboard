@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antari — Distributor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --red: #D64541;
+    --blue: #1B3A7A;
+    --gold: #B8791E;
+    --cream: #FFF8EE;
+    --dark: #2B2118;
+    --line: #D9CBB2;
+    --muted: #7A6F60;
+    --card-bg: #FFFFFF;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cream: #1C1712;
+      --dark: #F3ECE0;
+      --line: #3A3226;
+      --muted: #B7A992;
+      --card-bg: #24201A;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    background: var(--cream);
+    color: var(--dark);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .flag-stripe { height: 6px; display: flex; }
+  .flag-stripe div { flex: 1; }
+  .flag-stripe .r { background: var(--red); }
+  .flag-stripe .b { background: var(--blue); }
+  .flag-stripe .o { background: var(--gold); }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 80px; }
+
+  header { text-align: center; margin-bottom: 44px; }
+  .wordmark {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    font-size: clamp(32px, 6vw, 44px);
+    color: var(--red);
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  .tagline {
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--blue);
+    margin: 4px 0 2px;
+  }
+  .subtitle { font-size: 13px; color: var(--muted); margin: 0; }
+
+  .hero {
+    text-align: center;
+    padding: 28px 0 32px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 36px;
+  }
+  .hero-label {
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  .hero-number {
+    font-family: Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(40px, 9vw, 64px);
+    color: var(--dark);
+    margin: 0;
+    line-height: 1;
+  }
+  .hero-split {
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .hero-split .item { text-align: center; }
+  .hero-split .val { font-size: 20px; font-weight: 600; }
+  .hero-split .lbl { font-size: 12px; color: var(--muted); }
+  .hero-split .wholesale .val { color: var(--blue); }
+  .hero-split .direct .val { color: var(--gold); }
+
+  section { margin-bottom: 40px; }
+  h2 {
+    font-family: Georgia, serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--red);
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  .section-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 14px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0 10px 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  .rank-1 td:first-child::before { content: "① "; }
+  .store-name { font-weight: 600; }
+  .muted-row td { color: var(--muted); }
+  .flag-red { color: var(--red); font-weight: 600; }
+
+  .two-col { display: flex; gap: 32px; flex-wrap: wrap; }
+  .two-col > div { flex: 1; min-width: 260px; }
+
+  .callout {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--dark); }
+
+  .status {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 50px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  @media (max-width: 640px) {
+    .two-col { flex-direction: column; }
+    table { font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="flag-stripe"><div class="r"></div><div class="b"></div><div class="o"></div></div>
+
+<div class="wrap">
+  <header>
+    <p class="wordmark">ANTARI</p>
+    <p class="tagline">A Taste of Armenia</p>
+    <p class="subtitle">Distributor Dashboard — live from Supabase</p>
+  </header>
+
+  <div id="status" class="status">Loading your numbers…</div>
+  <div id="content" style="display:none;">
+
+    <div class="hero">
+      <p class="hero-label">Total Revenue</p>
+      <p class="hero-number" id="hero-total">—</p>
+      <div class="hero-split">
+        <div class="item wholesale"><div class="val" id="hero-wholesale">—</div><div class="lbl">Wholesale</div></div>
+        <div class="item direct"><div class="val" id="hero-direct">—</div><div class="lbl">Direct / Festival</div></div>
+      </div>
+    </div>
+
+    <section>
+      <h2>Store Ranking</h2>
+      <p class="section-note">Wholesale revenue by store, ranked highest to lowest. Last payment date shows how recently each store has paid.</p>
+      <table>
+        <thead><tr><th>Store</th><th class="num">Revenue</th><th class="num">Invoices</th><th>Last Payment</th></tr></thead>
+        <tbody id="store-ranking-body"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Product Ranking</h2>
+      <p class="section-note">Wholesale units and revenue by product.</p>
+      <table>
+        <thead><tr><th>Product</th><th class="num">Units Sold</th><th class="num">Revenue</th></tr></thead>
+        <tbody id="product-ranking-body"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Accounts Receivable</h2>
+      <p class="section-note">Who owes money right now — only outstanding balances are listed.</p>
+      <table>
+        <thead><tr><th>Store</th><th class="num">Outstanding</th></tr></thead>
+        <tbody id="ar-body"></tbody>
+      </table>
+    </section>
+
+    <section class="two-col">
+      <div>
+        <h2>Zip Code Ranking</h2>
+        <table>
+          <thead><tr><th>Zip</th><th class="num">Revenue</th></tr></thead>
+          <tbody id="zip-body"></tbody>
+        </table>
+      </div>
+      <div>
+        <h2>Delivery Routes</h2>
+        <table>
+          <thead><tr><th>Route</th><th class="num">Stores</th><th class="num">Revenue</th></tr></thead>
+          <tbody id="route-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="callout" id="other-callout"></div>
+    </section>
+  </div>
+
+  <footer>Antari NYC · data refreshes on page load</footer>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://hzufqpoauamlhkaoaacx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_1Rw5PxX0FCzqFwe4Qi-H-Q_xKystG52";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const fmt = n => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No payments yet";
+
+  async function load() {
+    try {
+      const [storeRank, prodRank, ar, zip, route, channel, other] = await Promise.all([
+        sb.from("v_store_ranking").select("*").order("revenue_rank"),
+        sb.from("v_product_ranking").select("*").order("revenue_rank"),
+        sb.from("v_accounts_receivable").select("*").order("outstanding_balance", { ascending: false }),
+        sb.from("v_zip_ranking").select("*").order("revenue_rank"),
+        sb.from("v_route_summary").select("*"),
+        sb.from("v_channel_summary").select("*"),
+        sb.from("v_other_bucket").select("*"),
+      ]);
+
+      for (const r of [storeRank, prodRank, ar, zip, route, channel, other]) {
+        if (r.error) throw r.error;
+      }
+
+      // Hero
+      const wholesale = channel.data.find(c => c.channel === "Wholesale")?.net_revenue || 0;
+      const direct = channel.data.find(c => c.channel === "Direct / Festival")?.net_revenue || 0;
+      document.getElementById("hero-total").textContent = fmt(Number(wholesale) + Number(direct));
+      document.getElementById("hero-wholesale").textContent = fmt(wholesale);
+      document.getElementById("hero-direct").textContent = fmt(direct);
+
+      // Store ranking
+      const storeBody = document.getElementById("store-ranking-body");
+      storeBody.innerHTML = storeRank.data.map(s => `
+        <tr class="${Number(s.total_revenue) === 0 ? 'muted-row' : ''}">
+          <td class="store-name">${s.store_name}</td>
+          <td class="num">${fmt(s.total_revenue)}</td>
+          <td class="num">${s.invoices}</td>
+          <td>${fmtDate(s.last_payment_date)}</td>
+        </tr>`).join("");
+
+      // Product ranking
+      const prodBody = document.getElementById("product-ranking-body");
+      prodBody.innerHTML = prodRank.data.map(p => `
+        <tr>
+          <td>${p.item_name}</td>
+          <td class="num">${Number(p.units_sold).toLocaleString()}</td>
+          <td class="num">${fmt(p.total_revenue)}</td>
+        </tr>`).join("");
+
+      // AR
+      const arBody = document.getElementById("ar-body");
+      arBody.innerHTML = ar.data.length
+        ? ar.data.map(a => `<tr><td class="store-name">${a.store_name}</td><td class="num flag-red">${fmt(a.outstanding_balance)}</td></tr>`).join("")
+        : `<tr><td colspan="2" class="muted-row">Nothing outstanding right now.</td></tr>`;
+
+      // Zip
+      document.getElementById("zip-body").innerHTML = zip.data.map(z => `
+        <tr><td>${z.zip}</td><td class="num">${fmt(z.total_revenue)}</td></tr>`).join("");
+
+      // Route
+      document.getElementById("route-body").innerHTML = route.data.map(r => `
+        <tr><td>${r.delivery_route}</td><td class="num">${r.stores_on_route}</td><td class="num">${fmt(r.total_revenue)}</td></tr>`).join("");
+
+      // Other callout
+      const o = other.data[0] || { total_revenue: 0, invoices: 0 };
+      document.getElementById("other-callout").innerHTML =
+        `<b>${fmt(o.total_revenue)}</b> across <b>${o.invoices} invoices</b> is currently unmatched to a real store (personal names, one-off labels, ambiguous entries). Clean up the <b>Name Mapping</b> table in Supabase to recover this into real store rankings.`;
+
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "block";
+    } catch (err) {
+      document.getElementById("status").innerHTML =
+        "Couldn't load data: " + (err.message || "unknown error") + ". Check your Supabase connection.";
+      console.error(err);
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
