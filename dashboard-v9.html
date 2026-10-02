@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antari — Distributor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+  :root {
+    --red: #D64541; --blue: #1B3A7A; --gold: #B8791E;
+    --cream: #FFF8EE; --dark: #2B2118; --line: #D9CBB2; --muted: #7A6F60; --card-bg: #FFFFFF;
+    --green: #3E7A4E;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--cream); color: var(--dark);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .flag-stripe { height: 6px; display: flex; }
+  .flag-stripe div { flex: 1; }
+  .flag-stripe .r { background: var(--red); }
+  .flag-stripe .b { background: var(--blue); }
+  .flag-stripe .o { background: var(--gold); }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { text-align: center; margin-bottom: 24px; position: relative; }
+  .wordmark {
+    font-family: Georgia, serif; font-weight: 700;
+    font-size: clamp(28px, 6vw, 38px); color: var(--red); letter-spacing: 0.02em; margin: 0;
+  }
+  .tagline { font-family: Georgia, serif; font-style: italic; font-size: 13px; color: var(--blue); margin: 2px 0; }
+  .auth-badge {
+    position: absolute; top: 0; right: 0; font-size: 11.5px; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .auth-badge button {
+    font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .kpi { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .kpi .val { font-family: Georgia, serif; font-weight: 700; font-size: 22px; }
+  .kpi .lbl { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .kpi.total .val { color: var(--dark); font-size: 26px; }
+  .kpi.wholesale .val { color: var(--blue); }
+  .kpi.direct .val { color: var(--gold); }
+  .kpi.ar .val { color: var(--red); }
+  .kpi.other .val { color: var(--muted); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .tab { padding: 10px 16px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+  .tab.active { color: var(--red); border-bottom-color: var(--red); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; cursor: pointer; transition: transform .12s, box-shadow .12s; position: relative; }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(43,33,24,0.12); }
+  .tile.zero { opacity: 0.45; cursor: default; }
+  .tile.zero:hover { transform: none; box-shadow: none; }
+  .tile.product { cursor: default; }
+  .tile.product:hover { transform: none; box-shadow: none; }
+  .tile .rank { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 700; color: var(--gold); }
+  .tile .name { font-weight: 600; font-size: 13.5px; margin: 0 0 6px; padding-right: 22px; line-height: 1.25; }
+  .tile .revenue { font-family: Georgia, serif; font-weight: 700; font-size: 18px; color: var(--dark); }
+  .tile .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tile .owes { display: inline-block; margin-top: 8px; font-size: 10.5px; font-weight: 700; color: var(--red); background: rgba(214,69,65,0.1); padding: 2px 7px; border-radius: 20px; }
+
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(43,33,24,0.45); z-index: 50; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--card-bg); border-radius: 14px; padding: 26px; max-width: 380px; width: 100%; border: 1px solid var(--line); max-height: 85vh; overflow-y: auto; }
+  .modal h3 { font-family: Georgia, serif; font-size: 20px; margin: 0 0 4px; }
+  .modal .modal-rank { font-size: 12px; color: var(--gold); font-weight: 700; margin-bottom: 16px; }
+  .modal-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .modal-row:last-child { border-bottom: none; }
+  .modal-row .k { color: var(--muted); }
+  .modal-row .v { font-weight: 600; }
+  .modal-row .v.red { color: var(--red); }
+  .modal-close { margin-top: 18px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--dark); font-size: 14px; cursor: pointer; }
+
+  h2.section-label { font-family: Georgia, serif; font-size: 15px; color: var(--muted); margin: 0 0 12px; font-weight: 400; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+  .status { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+  /* Auth form */
+  .auth-box { max-width: 340px; margin: 40px auto; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; padding: 24px; text-align: center; }
+  .auth-box input { width: 100%; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); color: var(--dark); font-size: 14px; }
+  .auth-box button { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+  .auth-box .btn-primary { background: var(--red); color: white; }
+  .auth-box .btn-secondary { background: transparent; border: 1px solid var(--line); color: var(--dark); }
+  .auth-msg { font-size: 12.5px; color: var(--muted); margin-top: 10px; min-height: 16px; }
+
+  /* Upload */
+  .dropzone {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 40px 20px; text-align: center;
+    color: var(--muted); cursor: pointer; margin-bottom: 24px; transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag { border-color: var(--red); background: rgba(214,69,65,0.05); }
+  .dropzone input { display: none; }
+  .upload-card { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .upload-card .uc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .uc-title { font-weight: 700; font-size: 14px; }
+  .uc-type { font-size: 11px; color: var(--muted); }
+  .uc-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+  .uc-badge.ok { background: rgba(62,122,78,0.12); color: var(--green); }
+  .uc-badge.warn { background: rgba(184,121,30,0.12); color: var(--gold); }
+  .uc-badge.err { background: rgba(214,69,65,0.12); color: var(--red); }
+  .preview-table { width: 100%; font-size: 12px; border-collapse: collapse; margin: 10px 0; }
+  .preview-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+  .preview-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+  .uc-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-import { background: var(--blue); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-import:disabled { opacity: 0.5; cursor: default; }
+  .btn-dismiss { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .uc-note { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+  /* Trends — Pulse style */
+  .pulse-card { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin-bottom: 20px; }
+  .pulse-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; }
+  .pulse-number { font-family: Georgia, serif; font-weight: 700; font-size: 28px; margin: 0; }
+  .pulse-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .trend-note { font-size: 12.5px; color: var(--muted); margin-bottom: 20px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+
+  /* Large zip tiles */
+  .tile-grid-xl { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .tile-xl {
+    background: var(--card-bg); border: 1px solid var(--line); border-radius: 14px; padding: 22px;
+    cursor: pointer; transition: transform .12s, box-shadow .12s; position: relative; text-align: center;
+  }
+  .tile-xl:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(43,33,24,0.14); }
+  .tile-xl .rank { position: absolute; top: 14px; right: 16px; font-size: 11px; font-weight: 700; color: var(--gold); }
+  .tile-xl .zipcode { font-family: Georgia, serif; font-weight: 700; font-size: 24px; margin: 0 0 6px; }
+  .tile-xl .revenue { font-size: 19px; font-weight: 700; color: var(--dark); }
+  .tile-xl .demo { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.3; }
+
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--blue); cursor: pointer; margin-bottom: 16px; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="flag-stripe"><div class="r"></div><div class="b"></div><div class="o"></div></div>
+
+<div class="wrap">
+  <header>
+    <p class="wordmark">ANTARI</p>
+    <p class="tagline">A Taste of Armenia — Distributor Dashboard</p>
+    <div class="auth-badge" id="auth-badge"></div>
+  </header>
+
+  <div id="auth-gate" style="display:none;">
+    <div class="auth-box">
+      <p style="margin-top:0;color:var(--muted);font-size:13px;">Sign in to view the dashboard. This dashboard is private to you and your partner.</p>
+      <input type="email" id="auth-email" placeholder="Email">
+      <input type="password" id="auth-password" placeholder="Password">
+      <button class="btn-primary" onclick="signIn()">Sign In</button>
+      <button class="btn-secondary" onclick="signUp()">Create Account (first time)</button>
+      <div class="auth-msg" id="auth-msg"></div>
+    </div>
+  </div>
+
+  <div id="status" class="status" style="display:none;">Loading your numbers…</div>
+  <div id="content" style="display:none;">
+
+    <div class="kpi-row">
+      <div class="kpi total"><div class="val" id="kpi-total">—</div><div class="lbl">Total Revenue</div></div>
+      <div class="kpi wholesale"><div class="val" id="kpi-wholesale">—</div><div class="lbl">Wholesale</div></div>
+      <div class="kpi direct"><div class="val" id="kpi-direct">—</div><div class="lbl">Direct / Festival</div></div>
+      <div class="kpi ar"><div class="val" id="kpi-ar">—</div><div class="lbl">Outstanding (AR)</div></div>
+      <div class="kpi other"><div class="val" id="kpi-other">—</div><div class="lbl">Unmatched ("Other")</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">Overview</div>
+      <div class="tab" data-tab="zips">Zips</div>
+      <div class="tab" data-tab="stores">Stores</div>
+      <div class="tab" data-tab="products">Products</div>
+      <div class="tab" data-tab="routes">Routes</div>
+      <div class="tab" data-tab="trends">Trends</div>
+      <div class="tab" data-tab="upload">Upload</div>
+    </div>
+
+    <div class="panel active" id="panel-overview">
+      <h2 class="section-label">Data quality and what actually needs your attention right now.</h2>
+
+      <div class="pulse-card" style="margin-bottom:16px;">
+        <p class="pulse-label">Data Coverage / Attribution</p>
+        <p style="font-size:13px;color:var(--muted);margin:4px 0 14px;">This is a data-quality measure, not a business decline — it reflects how much of Zoho's customer data has been matched to a real store so far.</p>
+        <div style="display:flex;gap:28px;flex-wrap:wrap;">
+          <div><div class="pulse-number" style="font-size:22px;color:var(--green);" id="ov-mapped-pct">—</div><div class="pulse-sub">of wholesale revenue mapped to a known store</div></div>
+          <div><div class="pulse-number" style="font-size:22px;color:var(--muted);" id="ov-other-amt">—</div><div class="pulse-sub"><span id="ov-other-names">—</span> customer names need review</div></div>
+        </div>
+      </div>
+
+      <div class="pulse-card" style="margin-bottom:16px;">
+        <p class="pulse-label">Top Unmapped Customers (by revenue)</p>
+        <div id="ov-unmapped-list" style="margin-top:8px;font-size:13.5px;"></div>
+      </div>
+
+      <div class="pulse-card" style="margin-bottom:16px;">
+        <p class="pulse-label">Longest Since Last Payment</p>
+        <div id="ov-stale-list" style="margin-top:8px;font-size:13.5px;"></div>
+      </div>
+
+      <div class="pulse-card">
+        <p class="pulse-label">Largest Outstanding Balances</p>
+        <div id="ov-ar-list" style="margin-top:8px;font-size:13.5px;"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-zips">
+      <div id="zips-grid-view">
+        <h2 class="section-label">Tap a zip code to see which stores are in it, ranked by revenue.</h2>
+        <div class="tile-grid-xl" id="zip-tiles"></div>
+      </div>
+      <div id="zips-drilldown-view" style="display:none;">
+        <div class="back-link" onclick="showZipGrid()">← Back to all zips</div>
+        <h2 class="section-label" id="zip-drilldown-label"></h2>
+        <div class="tile-grid" id="zip-drilldown-stores"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-stores">
+      <h2 class="section-label">All stores, ranked by revenue — faded tiles have no sales yet this period.</h2>
+      <div class="tile-grid" id="store-tiles"></div>
+    </div>
+
+    <div class="panel" id="panel-products">
+      <div id="products-top-bottom">
+        <h2 class="section-label">Top performers</h2>
+        <div class="tile-grid" id="product-top-tiles" style="margin-bottom:28px;"></div>
+        <h2 class="section-label">Slow movers — worth a push or a discount</h2>
+        <div class="tile-grid" id="product-bottom-tiles" style="margin-bottom:20px;"></div>
+        <div class="back-link" onclick="toggleAllProducts(true)">Show all 25 products →</div>
+      </div>
+      <div id="products-all-view" style="display:none;">
+        <div class="back-link" onclick="toggleAllProducts(false)">← Back to top/slow movers</div>
+        <table class="preview-table" style="font-size:13px;">
+          <thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th></tr></thead>
+          <tbody id="product-all-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-routes">
+      <div id="routes-grid-view">
+        <h2 class="section-label">Tap a route to see the stores on it, for planning driving days.</h2>
+        <div class="tile-grid" id="route-tiles"></div>
+      </div>
+      <div id="routes-drilldown-view" style="display:none;">
+        <div class="back-link" onclick="showRouteGrid()">← Back to all routes</div>
+        <h2 class="section-label" id="route-drilldown-label"></h2>
+        <div class="tile-grid" id="route-drilldown-stores"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-trends">
+      <div class="trend-note" id="trend-note"></div>
+      <div id="pulse-payments"></div>
+      <div id="pulse-revenue"></div>
+      <div id="pulse-ar"></div>
+    </div>
+
+    <div class="panel" id="panel-upload">
+      <div class="dropzone" id="dropzone">
+        <div><b>Drop PDFs here</b> or click to browse</div>
+        <div style="font-size:12px;margin-top:6px;">Sales by Customer, Sales by Item, Customer Balance Summary, Payments Received, or a Square Sales Report — drop several at once.</div>
+        <input type="file" id="file-input" accept="application/pdf" multiple>
+      </div>
+      <div id="upload-results"></div>
+    </div>
+  </div>
+
+  <footer>Antari NYC · data refreshes on page load</footer>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-rank" id="modal-rank"></div>
+    <h3 id="modal-name"></h3>
+    <div class="modal-row" id="row-revenue"><span class="k">Revenue</span><span class="v" id="modal-revenue"></span></div>
+    <div class="modal-row" id="row-invoices"><span class="k">Invoices</span><span class="v" id="modal-invoices"></span></div>
+    <div class="modal-row" id="row-payment"><span class="k">Last Payment</span><span class="v" id="modal-payment"></span></div>
+    <div class="modal-row" id="modal-ar-row" style="display:none;"><span class="k">Outstanding Balance</span><span class="v red" id="modal-ar"></span></div>
+    <div class="modal-row" id="row-avgorder"><span class="k">Avg Order Value</span><span class="v" id="modal-avgorder"></span></div>
+    <div class="modal-row" id="row-share"><span class="k">Share of Total Revenue</span><span class="v" id="modal-share"></span></div>
+    <div class="modal-row" id="row-cadence"><span class="k">Avg Days Between Payments</span><span class="v" id="modal-cadence"></span></div>
+    <div class="modal-row" id="row-population" style="display:none;"><span class="k">Population</span><span class="v" id="modal-population"></span></div>
+    <div class="modal-row" id="row-majority" style="display:none;"><span class="k">Majority Group</span><span class="v" id="modal-majority"></span></div>
+    <div class="modal-row" id="row-notes" style="display:none;flex-direction:column;gap:4px;"><span class="k">Notes</span><span class="v" id="modal-notes" style="font-weight:400;text-align:left;"></span></div>
+    <button class="modal-close" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<script>
+  console.log("CHECKPOINT 1: script started");
+  const SUPABASE_URL = "https://hzufqpoauamlhkaoaacx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_1Rw5PxX0FCzqFwe4Qi-H-Q_xKystG52";
+
+  let sb;
+  try {
+    if (!window.supabase) throw new Error("Supabase library failed to load from CDN");
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log("CHECKPOINT 2: supabase client created OK", sb);
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+  } catch (initErr) {
+    console.log("CHECKPOINT 2 FAILED:", initErr);
+    document.getElementById("auth-gate").innerHTML =
+      `<div class="auth-box"><p style="color:var(--red);font-weight:600;">Couldn't load required libraries.</p>
+       <p style="color:var(--muted);font-size:13px;">This is usually a slow connection, an ad-blocker, or a network issue blocking cdn.jsdelivr.net.
+       Try refreshing the page, or disabling any content-blocking extension for this site.</p></div>`;
+    document.getElementById("auth-gate").style.display = "block";
+    throw initErr; // stop here, nothing below can safely run without sb
+  }
+
+  const fmt = n => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtCompact = n => { const v = Number(n); return v >= 1000 ? "$" + (v/1000).toFixed(1) + "k" : fmt(v); };
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No payments yet";
+  const ordinal = n => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); };
+
+  let storeData = [];
+
+  // ---------------- Modal ----------------
+  function setStoreModeRows(isStore) {
+    ["row-revenue","row-invoices","row-payment","row-avgorder","row-share","row-cadence"].forEach(id => document.getElementById(id).style.display = isStore ? "flex" : "none");
+    ["row-population","row-majority","row-notes"].forEach(id => document.getElementById(id).style.display = isStore ? "none" : "flex");
+  }
+
+  function openModal(store) {
+    setStoreModeRows(true);
+    document.getElementById("modal-rank").textContent = Number(store.total_revenue) > 0 ? ordinal(store.revenue_rank) + " by revenue" : "No sales yet";
+    document.getElementById("modal-name").textContent = store.store_name;
+    document.getElementById("modal-revenue").textContent = fmt(store.total_revenue);
+    document.getElementById("modal-invoices").textContent = store.invoices;
+    document.getElementById("modal-payment").textContent = fmtDate(store.last_payment_date);
+    const arRow = document.getElementById("modal-ar-row");
+    if (store.outstanding_balance && Number(store.outstanding_balance) > 0) {
+      arRow.style.display = "flex";
+      document.getElementById("modal-ar").textContent = fmt(store.outstanding_balance);
+    } else arRow.style.display = "none";
+    document.getElementById("modal-avgorder").textContent = store.invoices > 0 ? fmt(store.total_revenue / store.invoices) : "—";
+    document.getElementById("modal-share").textContent = store.sharePct != null ? store.sharePct.toFixed(1) + "%" : "—";
+    document.getElementById("modal-cadence").textContent = store.avgDaysBetween ? "~" + Math.round(store.avgDaysBetween) + " days" : "Not enough data yet";
+    document.getElementById("modal-backdrop").classList.add("open");
+  }
+
+  function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+  document.getElementById("modal-backdrop").addEventListener("click", e => { if (e.target.id === "modal-backdrop") closeModal(); });
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ---------------- Auth (gates the entire dashboard now) ----------------
+  async function refreshAuthUI() {
+    console.log("CHECKPOINT 3: refreshAuthUI called, about to call getSession()");
+    let session = null;
+    try {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("getSession() timed out after 5s")), 5000));
+      const result = await Promise.race([sb.auth.getSession(), timeout]);
+      console.log("CHECKPOINT 4: getSession() returned", result);
+      session = result.data.session;
+    } catch (sessionErr) {
+      console.log("CHECKPOINT 4 FAILED: getSession() threw", sessionErr);
+      document.getElementById("auth-gate").style.display = "block";
+      return;
+    }
+    const badge = document.getElementById("auth-badge");
+    if (session) {
+      console.log("CHECKPOINT 5: session found, showing dashboard");
+      badge.innerHTML = `<span>${session.user.email}</span><button onclick="signOut()">Sign out</button>`;
+      document.getElementById("auth-gate").style.display = "none";
+      document.getElementById("status").style.display = "block";
+      load();
+    } else {
+      console.log("CHECKPOINT 5: no session, showing login form now");
+      badge.innerHTML = "";
+      document.getElementById("auth-gate").style.display = "block";
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "none";
+    }
+    console.log("CHECKPOINT 6: refreshAuthUI finished");
+  }
+  async function signIn() {
+    const email = document.getElementById("auth-email").value;
+    const password = document.getElementById("auth-password").value;
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    document.getElementById("auth-msg").textContent = error ? error.message : "Signed in.";
+    if (!error) refreshAuthUI();
+  }
+  async function signUp() {
+    const email = document.getElementById("auth-email").value;
+    const password = document.getElementById("auth-password").value;
+    const { error } = await sb.auth.signUp({ email, password });
+    document.getElementById("auth-msg").textContent = error ? error.message
+      : "Account created. If email confirmation is required, check your inbox — otherwise you're signed in.";
+    refreshAuthUI();
+  }
+  async function signOut() { await sb.auth.signOut(); refreshAuthUI(); }
+  sb.auth.onAuthStateChange(() => refreshAuthUI());
+
+  // ---------------- PDF parsing ----------------
+  function money(s) { return parseFloat(String(s).replace(/[,$]/g, "")); }
+  const MONTHS = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+  function parseDateLong(d) {
+    const m = d.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+    return m ? `${m[3]}-${MONTHS[m[2]]}-${m[1].padStart(2,'0')}` : null;
+  }
+
+  function detectType(text) {
+    if (/Sales by Customer/i.test(text)) return 'sales_customer';
+    if (/Sales by Item/i.test(text)) return 'sales_item';
+    if (/Customer Balance Summary/i.test(text)) return 'customer_balances';
+    if (/Payments Received/i.test(text)) return 'payments_received';
+    if (/Sales Report/i.test(text) && /ITEM SALES/i.test(text)) return 'festival_square';
+    return 'unknown';
+  }
+
+  function extractPeriod(text) {
+    const m = text.match(/From\s+(\d{1,2}\s+\w{3}\s+\d{4})\s+To\s+(\d{1,2}\s+\w{3}\s+\d{4})/i);
+    if (m) return { start: parseDateLong(m[1]), end: parseDateLong(m[2]) };
+    const asOf = text.match(/As of\s+(\d{1,2}\s+\w{3}\s+\d{4})/i);
+    if (asOf) return { asOf: parseDateLong(asOf[1]) };
+    return {};
+  }
+
+  function parseSalesCustomer(text) {
+    const rows = [];
+    const re = /^(.+?)\s+(\d+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Name\s+Invoice/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ zoho_name: m[1].trim(), invoice_count: parseInt(m[2]), sales: money(m[3]) });
+    }
+    return rows;
+  }
+  function parseSalesItem(text) {
+    const rows = [];
+    const re = /^(.+?)\s+(\S+)\s+([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Item Name/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ item_name: m[1].trim(), sku: m[2], quantity_sold: money(m[3]), sales: money(m[4]) });
+    }
+    return rows;
+  }
+  function parseBalances(text) {
+    const rows = [];
+    const re = /^(.+?)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+Dr\s+\$([\d,]+\.\d{2})\s+Dr$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Customer Name/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ zoho_name: m[1].trim(), outstanding_balance: money(m[4]) });
+    }
+    return rows;
+  }
+  function parsePayments(text) {
+    const rows = [];
+    const re = /^\d+\s+(\d{1,2}\s+\w{3}\s+\d{4})\s+Paid\s+(.+?)\s+(Check|Cash)\s+(INV-\d+)\s+[\w\s]+?\s+\$([\d,]+\.\d{2})/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^Payment Number/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ payment_date: parseDateLong(m[1]), zoho_name: m[2].trim(), payment_mode: m[3], invoice_number: m[4], amount: money(m[5]) });
+    }
+    return rows;
+  }
+  function parseFestivalSquare(text) {
+    const rows = [];
+    let inItems = false;
+    const re = /^(.+?)\s+×\s+(\d+)\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^ITEM SALES/i.test(line)) { inItems = true; continue; }
+      if (!inItems) continue;
+      if (/^©/.test(line)) break;
+      if (/^Regular\s+×/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ item_name: m[1].trim(), quantity_sold: parseInt(m[2]), sales: money(m[3]) });
+    }
+    const pm = text.match(/(\w{3})\s+(\d{1,2}),\s+(\d{4}).*?-\s*(\w{3})\s+(\d{1,2}),\s+(\d{4})/);
+    let period = {};
+    if (pm) period = { start: `${pm[3]}-${MONTHS[pm[1]]}-${pm[2].padStart(2,'0')}`, end: `${pm[6]}-${MONTHS[pm[4]]}-${pm[5].padStart(2,'0')}` };
+    return { rows, period };
+  }
+
+  async function extractTextFromPdf(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const lines = {};
+      for (const item of content.items) {
+        const y = Math.round(item.transform[5]);
+        if (!lines[y]) lines[y] = [];
+        lines[y].push(item);
+      }
+      const ys = Object.keys(lines).map(Number).sort((a,b) => b - a);
+      text += ys.map(y => lines[y].sort((a,b) => a.transform[4]-b.transform[4]).map(i=>i.str).join(' ')).join('\n') + '\n';
+    }
+    return text;
+  }
+
+  const TYPE_LABELS = {
+    sales_customer: "Sales by Customer", sales_item: "Sales by Item",
+    customer_balances: "Customer Balance Summary", payments_received: "Payments Received",
+    festival_square: "Square Festival Report", unknown: "Unrecognized format",
+  };
+
+  let uploadQueue = [];
+
+  async function handleFiles(files) {
+    for (const file of files) {
+      const id = Math.random().toString(36).slice(2);
+      const card = document.createElement("div");
+      card.className = "upload-card";
+      card.id = "uc-" + id;
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">${file.name}</span><span class="uc-badge warn">Reading…</span></div>`;
+      document.getElementById("upload-results").prepend(card);
+
+      try {
+        const text = await extractTextFromPdf(file);
+        const type = detectType(text);
+        const period = extractPeriod(text);
+        let rows = [];
+        if (type === 'sales_customer') rows = parseSalesCustomer(text);
+        else if (type === 'sales_item') rows = parseSalesItem(text);
+        else if (type === 'customer_balances') rows = parseBalances(text);
+        else if (type === 'payments_received') rows = parsePayments(text);
+        else if (type === 'festival_square') { const r = parseFestivalSquare(text); rows = r.rows; Object.assign(period, r.period); }
+
+        renderUploadCard(id, file.name, type, period, rows);
+      } catch (err) {
+        card.innerHTML = `<div class="uc-header"><span class="uc-title">${file.name}</span><span class="uc-badge err">Failed</span></div><div class="uc-note">${err.message}</div>`;
+      }
+    }
+  }
+
+  function renderUploadCard(id, filename, type, period, rows) {
+    const card = document.getElementById("uc-" + id);
+    if (type === 'unknown' || rows.length === 0) {
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">${filename}</span><span class="uc-badge err">Not recognized</span></div>
+        <div class="uc-note">Couldn't detect a known report type, or found 0 rows. This file won't be imported.</div>`;
+      return;
+    }
+    const previewRows = rows.slice(0, 5);
+    const cols = Object.keys(previewRows[0]);
+    const tableHtml = `<table class="preview-table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${previewRows.map(r => `<tr>${cols.map(c=>`<td>${r[c]}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const periodStr = period.start ? `${period.start} → ${period.end}` : period.asOf ? `as of ${period.asOf}` : "unknown period";
+
+    card.innerHTML = `
+      <div class="uc-header"><span class="uc-title">${filename}</span><span class="uc-badge ok">${TYPE_LABELS[type]}</span></div>
+      <div class="uc-type">${periodStr} · ${rows.length} rows parsed (showing first 5)</div>
+      ${tableHtml}
+      <div class="uc-actions">
+        <button class="btn-import" onclick="importRows('${id}')">Import ${rows.length} rows</button>
+        <button class="btn-dismiss" onclick="document.getElementById('uc-${id}').remove()">Dismiss</button>
+      </div>
+      <div class="uc-note">Review the preview above — if something looks wrong, dismiss instead of importing.</div>
+    `;
+    uploadQueue[id] = { type, period, rows };
+  }
+
+  async function importRows(id) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { alert("Please sign in first."); return; }
+    const { type, period, rows } = uploadQueue[id];
+    const card = document.getElementById("uc-" + id);
+    let payload = [];
+    if (type === 'sales_customer') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+    else if (type === 'sales_item') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+    else if (type === 'customer_balances') payload = rows.map(r => ({...r, as_of_date: period.asOf}));
+    else if (type === 'payments_received') payload = rows;
+    else if (type === 'festival_square') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+
+    const table = { sales_customer: 'sales_customer', sales_item: 'sales_item', customer_balances: 'customer_balances', payments_received: 'payments_received', festival_square: 'festival_sales' }[type];
+    const { error } = await sb.from(table).insert(payload);
+    if (error) {
+      card.querySelector('.uc-actions').insertAdjacentHTML('beforeend', `<span style="color:var(--red);font-size:12px;">Error: ${error.message}</span>`);
+    } else {
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">Imported ✓</span><span class="uc-badge ok">${rows.length} rows added</span></div>`;
+      setTimeout(() => location.reload(), 1200);
+    }
+  }
+
+  const dropzone = document.getElementById("dropzone");
+  dropzone.addEventListener("click", () => document.getElementById("file-input").click());
+  document.getElementById("file-input").addEventListener("change", e => handleFiles(e.target.files));
+  dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("drag"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+  dropzone.addEventListener("drop", e => {
+    e.preventDefault(); dropzone.classList.remove("drag");
+    handleFiles(e.dataTransfer.files);
+  });
+
+  // ---------------- Main dashboard load ----------------
+  async function load() {
+    try {
+      const [storeRank, prodRank, ar, zip, route, channel, other, stores, monthlyW, monthlyF, monthlyAR, monthlyPay, demo, payMapped, mappedRows, ancestry] = await Promise.all([
+        sb.from("v_store_ranking").select("*").order("revenue_rank"),
+        sb.from("v_product_ranking").select("*").order("revenue_rank"),
+        sb.from("v_accounts_receivable").select("*"),
+        sb.from("v_zip_ranking").select("*").order("revenue_rank"),
+        sb.from("v_route_summary").select("*"),
+        sb.from("v_channel_summary").select("*"),
+        sb.from("v_other_bucket").select("*"),
+        sb.from("stores").select("store_name,zip,delivery_route"),
+        sb.from("v_monthly_wholesale").select("*"),
+        sb.from("v_monthly_festival").select("*"),
+        sb.from("v_monthly_ar").select("*"),
+        sb.from("v_monthly_payments").select("*"),
+        sb.from("zip_demographics").select("*"),
+        sb.from("zip_ancestry").select("*"),
+        sb.from("v_payments_mapped").select("payment_date,mapped_store"),
+        sb.from("v_sales_customer_mapped").select("zoho_name,mapped_store,sales"),
+      ]);
+      for (const r of [storeRank, prodRank, ar, zip, route, channel, other, stores, monthlyW, monthlyF, monthlyAR, monthlyPay, demo, payMapped, mappedRows, ancestry]) {
+        if (r.error) throw r.error;
+      }
+
+      const wholesale = Number(channel.data.find(c => c.channel === "Wholesale")?.net_revenue || 0);
+      const direct = Number(channel.data.find(c => c.channel === "Direct / Festival")?.net_revenue || 0);
+      const arTotal = ar.data.reduce((s, r) => s + Number(r.outstanding_balance), 0);
+      const o = other.data[0] || { total_revenue: 0, invoices: 0 };
+
+      document.getElementById("kpi-total").textContent = fmtCompact(wholesale + direct);
+      document.getElementById("kpi-wholesale").textContent = fmtCompact(wholesale);
+      document.getElementById("kpi-direct").textContent = fmtCompact(direct);
+      document.getElementById("kpi-ar").textContent = fmtCompact(arTotal);
+      document.getElementById("kpi-other").textContent = fmtCompact(o.total_revenue);
+
+      // ---------------- Overview: Data Coverage + concrete worklists ----------------
+      const mappedWholesale = wholesale - Number(o.total_revenue || 0);
+      const mappedPct = wholesale > 0 ? (mappedWholesale / wholesale) * 100 : 0;
+      document.getElementById("ov-mapped-pct").textContent = wholesale > 0 ? mappedPct.toFixed(1) + "%" : "—";
+      document.getElementById("ov-other-amt").textContent = fmtCompact(o.total_revenue || 0);
+      const distinctOtherNames = new Set(mappedRows.data.filter(r => r.mapped_store === "Other").map(r => r.zoho_name)).size;
+      document.getElementById("ov-other-names").textContent = distinctOtherNames;
+
+      // Top unmapped customers by revenue
+      const otherByName = {};
+      for (const r of mappedRows.data) {
+        if (r.mapped_store !== "Other") continue;
+        otherByName[r.zoho_name] = (otherByName[r.zoho_name] || 0) + Number(r.sales);
+      }
+      const topUnmapped = Object.entries(otherByName).sort((a,b) => b[1]-a[1]).slice(0, 5);
+      document.getElementById("ov-unmapped-list").innerHTML = topUnmapped.length
+        ? topUnmapped.map(([name, amt]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);"><span>${name}</span><span style="font-weight:600;">${fmt(amt)}</span></div>`).join("")
+        : `<p style="color:var(--muted);">Nothing unmapped — fully attributed.</p>`;
+
+      // Longest since last payment (only stores with at least one payment on record)
+      const staleStores = storeRank.data.filter(s => s.last_payment_date).map(s => ({
+        name: s.store_name, date: s.last_payment_date,
+        days: Math.round((new Date() - new Date(s.last_payment_date + "T00:00:00")) / 86400000),
+      })).sort((a,b) => b.days - a.days).slice(0, 5);
+      document.getElementById("ov-stale-list").innerHTML = staleStores.length
+        ? staleStores.map(s => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);"><span>${s.name}</span><span style="font-weight:600;">${s.days} days ago</span></div>`).join("")
+        : `<p style="color:var(--muted);">Not enough payment history yet.</p>`;
+
+      // Largest outstanding balances
+      const topAR = [...ar.data].sort((a,b) => Number(b.outstanding_balance)-Number(a.outstanding_balance)).slice(0, 5);
+      document.getElementById("ov-ar-list").innerHTML = topAR.length
+        ? topAR.map(a => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);"><span>${a.store_name}</span><span style="font-weight:600;color:var(--red);">${fmt(a.outstanding_balance)}</span></div>`).join("")
+        : `<p style="color:var(--muted);">Nothing outstanding right now.</p>`;
+
+      const storeMeta = Object.fromEntries(stores.data.map(s => [s.store_name, s]));
+      const arMap = Object.fromEntries(ar.data.map(a => [a.store_name, a.outstanding_balance]));
+
+      // cadence: avg days between payments, per store
+      const paysByStore = {};
+      for (const p of payMapped.data) {
+        if (!paysByStore[p.mapped_store]) paysByStore[p.mapped_store] = [];
+        paysByStore[p.mapped_store].push(p.payment_date);
+      }
+      const cadenceByStore = {};
+      for (const [store, dates] of Object.entries(paysByStore)) {
+        const sorted = dates.map(d => new Date(d + "T00:00:00")).sort((a,b) => a - b);
+        if (sorted.length < 2) continue;
+        let totalGap = 0;
+        for (let i = 1; i < sorted.length; i++) totalGap += (sorted[i] - sorted[i-1]) / (1000*60*60*24);
+        cadenceByStore[store] = totalGap / (sorted.length - 1);
+      }
+
+      const totalWholesale = storeRank.data.reduce((s, r) => s + Number(r.total_revenue), 0);
+
+      storeData = storeRank.data.map(s => ({
+        ...s,
+        zip: storeMeta[s.store_name]?.zip,
+        delivery_route: storeMeta[s.store_name]?.delivery_route,
+        outstanding_balance: arMap[s.store_name] || 0,
+        avgDaysBetween: cadenceByStore[s.store_name] || null,
+        sharePct: totalWholesale > 0 ? (Number(s.total_revenue) / totalWholesale) * 100 : 0,
+      }));
+
+      function renderStoreTile(s, i) {
+        const zero = Number(s.total_revenue) === 0;
+        const owes = Number(s.outstanding_balance) > 0;
+        return `<div class="tile ${zero ? 'zero' : ''}" onclick='openModal(storeData[${i}])'>
+          <div class="rank">${zero ? '' : '#' + s.revenue_rank}</div>
+          <p class="name">${s.store_name}</p>
+          <div class="revenue">${fmtCompact(s.total_revenue)}</div>
+          <div class="sub">${s.invoices} invoice${s.invoices === 1 ? '' : 's'}</div>
+          ${owes ? `<div class="owes">Owes ${fmt(s.outstanding_balance)}</div>` : ''}
+        </div>`;
+      }
+
+      document.getElementById("store-tiles").innerHTML = storeData.map((s, i) => renderStoreTile(s, i)).join("");
+
+      // ---------------- Products: Top 5 / Bottom 5 / All ----------------
+      const sortedProducts = [...prodRank.data].sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+      const topProducts = sortedProducts.slice(0, 5);
+      const bottomProducts = sortedProducts.slice(-5).reverse();
+      const productTile = p => `<div class="tile product"><div class="rank">#${p.revenue_rank}</div><p class="name">${p.item_name}</p>
+        <div class="revenue">${fmtCompact(p.total_revenue)}</div><div class="sub">${Number(p.units_sold).toLocaleString()} units</div></div>`;
+      document.getElementById("product-top-tiles").innerHTML = topProducts.map(productTile).join("");
+      document.getElementById("product-bottom-tiles").innerHTML = bottomProducts.map(productTile).join("");
+      document.getElementById("product-all-rows").innerHTML = sortedProducts.map(p => `
+        <tr><td>${p.item_name}</td><td class="num">${Number(p.units_sold).toLocaleString()}</td><td class="num">${fmt(p.total_revenue)}</td></tr>`).join("");
+      window.toggleAllProducts = function(showAll) {
+        document.getElementById("products-top-bottom").style.display = showAll ? "none" : "block";
+        document.getElementById("products-all-view").style.display = showAll ? "block" : "none";
+      };
+
+      // ---------------- Zip tiles: real ancestry breakdown, drill down to stores ----------------
+      const ancestryByZip = {};
+      for (const a of ancestry.data) {
+        if (!ancestryByZip[a.zip]) ancestryByZip[a.zip] = [];
+        ancestryByZip[a.zip].push(a);
+      }
+      document.getElementById("zip-tiles").innerHTML = zip.data.map(z => {
+        const groups = (ancestryByZip[z.zip] || []).slice(0, 3);
+        const groupLine = groups.length
+          ? groups.map(g => g.pct != null ? `${g.ancestry_group} ${g.pct}%` : g.ancestry_group).join(" · ")
+          : "No ancestry data on file";
+        return `<div class="tile-xl" onclick="showZipDrilldown('${z.zip}')">
+          <div class="rank">#${z.revenue_rank}</div>
+          <p class="zipcode">${z.zip}</p>
+          <div class="revenue">${fmtCompact(z.total_revenue)}</div>
+          <div class="demo">${groupLine}</div>
+        </div>`;
+      }).join("");
+
+      window.showZipDrilldown = function(zipCode) {
+        const storesInZip = storeData.map((s, i) => ({...s, _i: i})).filter(s => s.zip === zipCode)
+          .sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+        document.getElementById("zip-drilldown-label").textContent = `Stores in ${zipCode}`;
+        document.getElementById("zip-drilldown-stores").innerHTML = storesInZip.map(s => renderStoreTile(s, s._i)).join("")
+          || `<p style="color:var(--muted);font-size:13px;">No stores on file for this zip yet.</p>`;
+        document.getElementById("zips-grid-view").style.display = "none";
+        document.getElementById("zips-drilldown-view").style.display = "block";
+      };
+      window.showZipGrid = function() {
+        document.getElementById("zips-drilldown-view").style.display = "none";
+        document.getElementById("zips-grid-view").style.display = "block";
+      };
+
+      // ---------------- Routes: drill down to stores on that route ----------------
+      document.getElementById("route-tiles").innerHTML = route.data.map(r => `
+        <div class="tile-xl" onclick="showRouteDrilldown('${r.delivery_route.replace(/'/g, "\\'")}')">
+          <p class="zipcode" style="font-size:16px;">${r.delivery_route}</p>
+          <div class="revenue">${fmtCompact(r.total_revenue)}</div>
+          <div class="demo">${r.stores_on_route} stores</div>
+        </div>`).join("");
+
+      window.showRouteDrilldown = function(routeName) {
+        const storesOnRoute = storeData.map((s, i) => ({...s, _i: i})).filter(s => s.delivery_route === routeName)
+          .sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+        document.getElementById("route-drilldown-label").textContent = routeName;
+        document.getElementById("route-drilldown-stores").innerHTML = storesOnRoute.map(s => renderStoreTile(s, s._i)).join("")
+          || `<p style="color:var(--muted);font-size:13px;">No stores assigned to this route yet.</p>`;
+        document.getElementById("routes-grid-view").style.display = "none";
+        document.getElementById("routes-drilldown-view").style.display = "block";
+      };
+      window.showRouteGrid = function() {
+        document.getElementById("routes-drilldown-view").style.display = "none";
+        document.getElementById("routes-grid-view").style.display = "block";
+      };
+
+      // ---------------- Trends: Pulse-style charts ----------------
+      const nMonths = monthlyW.data.length;
+      document.getElementById("trend-note").textContent = nMonths <= 1
+        ? "Wholesale/AR pulses will fill in as you upload more periods — but Payments Collected already has real multi-month history below."
+        : `Showing ${nMonths} periods of data.`;
+
+      const monthLabel = d => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short" });
+
+      function renderPulse(containerId, title, points, opts = {}) {
+        const el = document.getElementById(containerId);
+        if (points.length === 0) {
+          el.innerHTML = `<div class="pulse-card"><p class="pulse-label">${title}</p><p style="color:var(--muted);font-size:13px;">No data yet.</p></div>`;
+          return;
+        }
+        if (points.length === 1) {
+          el.innerHTML = `<div class="pulse-card"><p class="pulse-label">${title}</p>
+            <p class="pulse-number" style="font-size:19px;">${fmt(points[0].value)}</p>
+            <p class="pulse-sub">Insufficient history for trend — one more reporting period will unlock this.</p></div>`;
+          return;
+        }
+        const vals = points.map(p => p.value);
+        const first = vals[0], last = vals[vals.length - 1];
+        const avgChange = (last - first) / (vals.length - 1);
+        const up = avgChange >= 0;
+        const lineColor = '#1B3A7A'; // single muted brand color, no red/green flip
+
+        const W = 600, H = 150, PAD_X = 30, PAD_Y = 34;
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const range = (max - min) || 1;
+        const xStep = (W - PAD_X * 2) / (points.length - 1);
+        const coords = points.map((p, i) => ({
+          x: PAD_X + i * xStep,
+          y: PAD_Y + (H - PAD_Y * 2) * (1 - (p.value - min) / range),
+          ...p
+        }));
+
+        let path = `M ${coords[0].x} ${coords[0].y}`;
+        for (let i = 1; i < coords.length; i++) {
+          const prev = coords[i-1], cur = coords[i];
+          const midX = (prev.x + cur.x) / 2;
+          path += ` C ${midX} ${prev.y}, ${midX} ${cur.y}, ${cur.x} ${cur.y}`;
+        }
+
+        let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;">`;
+        svg += `<path d="${path}" fill="none" stroke="${lineColor}" stroke-width="1.75" stroke-linecap="round" opacity="0.85"/>`;
+        for (const c of coords) {
+          svg += `<circle cx="${c.x}" cy="${c.y}" r="2.5" fill="${lineColor}"/>`;
+          svg += `<text x="${c.x}" y="${c.y - 10}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--dark)" font-family="-apple-system,sans-serif">${fmtCompact(c.value)}</text>`;
+          svg += `<text x="${c.x}" y="${H - 6}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${c.label}</text>`;
+        }
+        svg += `</svg>`;
+
+        el.innerHTML = `<div class="pulse-card">
+          <p class="pulse-label">${title}</p>
+          <p class="pulse-number" style="font-size:19px;color:var(--dark);">${up ? '+' : '−'}${fmt(Math.abs(avgChange))}/period</p>
+          <p class="pulse-sub">${up ? 'Trending up' : 'Trending down'} on average ${opts.sub || ''}</p>
+          ${svg}
+        </div>`;
+      }
+
+      renderPulse("pulse-payments", "Cash Collected (Payments Received)",
+        monthlyPay.data.map(m => ({ label: monthLabel(m.month), value: Number(m.collected) })));
+
+      const revByMonth = {};
+      for (const m of monthlyW.data) revByMonth[m.month] = (revByMonth[m.month] || 0) + Number(m.revenue);
+      for (const m of monthlyF.data) revByMonth[m.month] = (revByMonth[m.month] || 0) + Number(m.revenue);
+      renderPulse("pulse-revenue", "Total Revenue (Wholesale + Direct)",
+        Object.entries(revByMonth).sort().map(([month, value]) => ({ label: monthLabel(month), value })));
+
+      renderPulse("pulse-ar", "Accounts Receivable Snapshots",
+        monthlyAR.data.map(m => ({ label: fmtDate(m.as_of_date), value: Number(m.total_outstanding) })), { sub: "(lower is better)" });
+
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "block";
+    } catch (err) {
+      document.getElementById("status").innerHTML = "Couldn't load data: " + (err.message || "unknown error") + ". Check your Supabase connection.";
+      console.error(err);
+    }
+  }
+
+  console.log("CHECKPOINT 7: reached end of script, calling refreshAuthUI() now");
+  refreshAuthUI();
+</script>
+</body>
+</html>
