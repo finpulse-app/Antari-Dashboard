@@ -1,0 +1,1272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antari — Distributor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+  :root {
+    --red: #D64541; --blue: #1B3A7A; --gold: #B8791E;
+    --cream: #FFF8EE; --dark: #2B2118; --line: #D9CBB2; --muted: #7A6F60; --card-bg: #FFFFFF;
+    --green: #3E7A4E;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--cream); color: var(--dark);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .flag-stripe { height: 6px; display: flex; }
+  .flag-stripe div { flex: 1; }
+  .flag-stripe .r { background: var(--red); }
+  .flag-stripe .b { background: var(--blue); }
+  .flag-stripe .o { background: var(--gold); }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { text-align: center; margin-bottom: 24px; position: relative; }
+  .wordmark {
+    font-family: Georgia, serif; font-weight: 700;
+    font-size: clamp(28px, 6vw, 38px); color: var(--red); letter-spacing: 0.02em; margin: 0;
+  }
+  .tagline { font-family: Georgia, serif; font-style: italic; font-size: 13px; color: var(--blue); margin: 2px 0; }
+  .auth-badge {
+    position: absolute; top: 0; right: 0; font-size: 11.5px; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .auth-badge button {
+    font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .kpi { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .kpi .val { font-family: Georgia, serif; font-weight: 700; font-size: 22px; }
+  .kpi .lbl { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .kpi.total .val { color: var(--dark); font-size: 26px; }
+  .kpi.wholesale .val { color: var(--blue); }
+  .kpi.direct .val { color: var(--gold); }
+  .kpi.ar .val { color: var(--red); }
+  .kpi.other .val { color: var(--muted); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .tab { padding: 10px 16px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+  .tab.active { color: var(--red); border-bottom-color: var(--red); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; cursor: pointer; transition: transform .12s, box-shadow .12s; position: relative; }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(43,33,24,0.12); }
+  .tile.zero { opacity: 0.45; cursor: default; }
+  .tile.zero:hover { transform: none; box-shadow: none; }
+  .tile.product { cursor: default; }
+  .tile.product:hover { transform: none; box-shadow: none; }
+  .tile .rank { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 700; color: var(--gold); }
+  .tile .name { font-weight: 600; font-size: 13.5px; margin: 0 0 6px; padding-right: 22px; line-height: 1.25; }
+  .tile .revenue { font-family: Georgia, serif; font-weight: 700; font-size: 18px; color: var(--dark); }
+  .tile .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tile .owes { display: inline-block; margin-top: 8px; font-size: 10.5px; font-weight: 700; color: var(--red); background: rgba(214,69,65,0.1); padding: 2px 7px; border-radius: 20px; }
+
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(43,33,24,0.45); z-index: 50; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--card-bg); border-radius: 14px; padding: 26px; max-width: 380px; width: 100%; border: 1px solid var(--line); max-height: 85vh; overflow-y: auto; }
+  .modal h3 { font-family: Georgia, serif; font-size: 20px; margin: 0 0 4px; }
+  .modal .modal-rank { font-size: 12px; color: var(--gold); font-weight: 700; margin-bottom: 16px; }
+  .modal-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .modal-row:last-child { border-bottom: none; }
+  .modal-row .k { color: var(--muted); }
+  .modal-row .v { font-weight: 600; }
+  .modal-row .v.red { color: var(--red); }
+  .modal-close { margin-top: 18px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--dark); font-size: 14px; cursor: pointer; }
+
+  h2.section-label { font-family: Georgia, serif; font-size: 15px; color: var(--muted); margin: 0 0 12px; font-weight: 400; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+  .status { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+  /* Auth form */
+  .auth-box { max-width: 340px; margin: 40px auto; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; padding: 24px; text-align: center; }
+  .auth-box input { width: 100%; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); color: var(--dark); font-size: 14px; }
+  .auth-box button { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+  .auth-box .btn-primary { background: var(--red); color: white; }
+  .auth-box .btn-secondary { background: transparent; border: 1px solid var(--line); color: var(--dark); }
+  .auth-msg { font-size: 12.5px; color: var(--muted); margin-top: 10px; min-height: 16px; }
+
+  /* Upload */
+  .dropzone {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 40px 20px; text-align: center;
+    color: var(--muted); cursor: pointer; margin-bottom: 24px; transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag { border-color: var(--red); background: rgba(214,69,65,0.05); }
+  .dropzone input { display: none; }
+  .upload-card { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .upload-card .uc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .uc-title { font-weight: 700; font-size: 14px; }
+  .uc-type { font-size: 11px; color: var(--muted); }
+  .uc-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+  .uc-badge.ok { background: rgba(62,122,78,0.12); color: var(--green); }
+  .uc-badge.warn { background: rgba(184,121,30,0.12); color: var(--gold); }
+  .uc-badge.err { background: rgba(214,69,65,0.12); color: var(--red); }
+  .preview-table { width: 100%; font-size: 12px; border-collapse: collapse; margin: 10px 0; }
+  .preview-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+  .preview-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+  .uc-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-import { background: var(--blue); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-import:disabled { opacity: 0.5; cursor: default; }
+  .btn-dismiss { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .uc-note { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+  /* Trends — Pulse style */
+  .pulse-card { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin-bottom: 20px; }
+  .pulse-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; }
+  .pulse-number { font-family: Georgia, serif; font-weight: 700; font-size: 28px; margin: 0; }
+  .pulse-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .range-btn {
+    font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
+    border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .range-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+  .trend-note { font-size: 12.5px; color: var(--muted); margin-bottom: 20px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+
+  /* Large zip tiles */
+  .tile-grid-xl { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .tile-xl {
+    background: var(--card-bg); border: 1px solid var(--line); border-radius: 14px; padding: 22px;
+    cursor: pointer; transition: transform .12s, box-shadow .12s; position: relative; text-align: center;
+  }
+  .tile-xl:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(43,33,24,0.14); }
+  .tile-xl .rank { position: absolute; top: 14px; right: 16px; font-size: 11px; font-weight: 700; color: var(--gold); }
+  .tile-xl .zipcode { font-family: Georgia, serif; font-weight: 700; font-size: 24px; margin: 0 0 6px; }
+  .tile-xl .revenue { font-size: 19px; font-weight: 700; color: var(--dark); }
+  .tile-xl .demo { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.3; }
+
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--blue); cursor: pointer; margin-bottom: 16px; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+
+  /* Overview */
+  .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ov-grid .pulse-card { margin-bottom: 0; }
+  @media (max-width: 720px) { .ov-grid { grid-template-columns: 1fr; } }
+  .ov-row { padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .ov-row:last-child { border-bottom: none; }
+  .ov-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+  .ov-name { font-weight: 600; min-width: 0; }
+  .ov-val { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ov-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tag-unlisted { font-size: 10.5px; font-weight: 500; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; }
+  .empty-note { color: var(--muted); font-size: 13px; padding: 6px 0; }
+  .red-text { color: var(--red); font-weight: 700; }
+  .paid-btn { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 16px; border: 1px solid var(--blue); background: transparent; color: var(--blue); cursor: pointer; margin-left: 8px; }
+  .paid-btn:hover { background: var(--blue); color: #fff; }
+
+  /* Modals (shared) */
+  .modal-row { gap: 12px; }
+  .modal-row .v { text-align: right; }
+  .modal.wide { max-width: 580px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-ghost { border: 1px solid var(--line); background: transparent; color: var(--dark); }
+  .btn-solid { border: 1px solid var(--blue); background: var(--blue); color: #fff; }
+  .btn-solid:disabled { opacity: .5; cursor: default; }
+  .pay-options { display: flex; gap: 8px; margin: 14px 0 10px; }
+  .pay-opt { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--dark); cursor: pointer; text-align: center; font-size: 13.5px; font-weight: 600; }
+  .pay-opt small { display: block; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  .pay-opt.active { border-color: var(--blue); background: rgba(27,58,122,0.06); }
+  .field-label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  .field-input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); color: var(--dark); font-size: 14px; }
+  .pay-error { color: var(--red); font-size: 12.5px; min-height: 16px; margin-top: 8px; }
+  .pay-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+  .seg { display: flex; gap: 6px; margin: 16px 0 4px; flex-wrap: wrap; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--dark); color: var(--cream); padding: 10px 16px; border-radius: 10px; font-size: 13px; display: none; z-index: 80; align-items: center; gap: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); max-width: 92vw; }
+  #toast button { background: transparent; border: none; color: #F2A93B; font-weight: 700; cursor: pointer; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="flag-stripe"><div class="r"></div><div class="b"></div><div class="o"></div></div>
+
+<div class="wrap">
+  <header>
+    <p class="wordmark">ANTARI</p>
+    <p class="tagline">A Taste of Armenia — Distributor Dashboard</p>
+    <div class="auth-badge" id="auth-badge"></div>
+  </header>
+
+  <div id="auth-gate" style="display:none;">
+    <div class="auth-box">
+      <p style="margin-top:0;color:var(--muted);font-size:13px;">Sign in to view the dashboard. This dashboard is private to you and your partner.</p>
+      <input type="email" id="auth-email" placeholder="Email">
+      <input type="password" id="auth-password" placeholder="Password">
+      <button class="btn-primary" onclick="signIn()">Sign In</button>
+      <button class="btn-secondary" onclick="signUp()">Create Account (first time)</button>
+      <div class="auth-msg" id="auth-msg"></div>
+    </div>
+  </div>
+
+  <div id="status" class="status" style="display:none;">Loading your numbers…</div>
+  <div id="content" style="display:none;">
+
+    <div class="kpi-row">
+      <div class="kpi total"><div class="val" id="kpi-total">—</div><div class="lbl">Total Revenue</div></div>
+      <div class="kpi wholesale"><div class="val" id="kpi-wholesale">—</div><div class="lbl">Wholesale</div></div>
+      <div class="kpi direct"><div class="val" id="kpi-direct">—</div><div class="lbl">Direct / Festival</div></div>
+      <div class="kpi ar"><div class="val" id="kpi-ar">—</div><div class="lbl">Outstanding (AR)</div></div>
+      <div class="kpi other"><div class="val" id="kpi-other">—</div><div class="lbl">Other buyers</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">Overview</div>
+      <div class="tab" data-tab="zips">Zips</div>
+      <div class="tab" data-tab="stores">Customers</div>
+      <div class="tab" data-tab="products">Products</div>
+      <div class="tab" data-tab="routes">Routes</div>
+      <div class="tab" data-tab="trends">Trends</div>
+      <div class="tab" data-tab="upload">Upload</div>
+    </div>
+
+    <div class="panel active" id="panel-overview">
+      <div class="ov-grid">
+        <div class="pulse-card"><p class="pulse-label" id="ov-top-label">Top 5 customers</p><div id="ov-top"></div></div>
+        <div class="pulse-card"><p class="pulse-label" id="ov-bottom-label">Bottom 5 customers</p><div id="ov-bottom"></div></div>
+        <div class="pulse-card"><p class="pulse-label">Longest since last payment</p><div id="ov-stale"></div></div>
+        <div class="pulse-card"><p class="pulse-label">Owed to you</p><div id="ov-owed"></div></div>
+      </div>
+      <p class="pulse-sub" id="ov-footnote" style="margin-top:14px;"></p>
+    </div>
+
+    <div class="panel" id="panel-zips">
+      <div id="zips-grid-view">
+        <h2 class="section-label">Tap a zip code to see which customers (stores and restaurants) are in it, ranked by revenue.</h2>
+        <div class="tile-grid-xl" id="zip-tiles"></div>
+      </div>
+      <div id="zips-drilldown-view" style="display:none;">
+        <div class="back-link" onclick="showZipGrid()">← Back to all zips</div>
+        <h2 class="section-label" id="zip-drilldown-label"></h2>
+        <div class="tile-grid" id="zip-drilldown-stores"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-stores">
+      <div id="stores-top-bottom">
+        <h2 class="section-label">Top performers</h2>
+        <div class="tile-grid" id="store-top-tiles" style="margin-bottom:28px;"></div>
+        <h2 class="section-label">Needs attention — no sales yet, or longest since last payment</h2>
+        <div class="tile-grid" id="store-attention-tiles" style="margin-bottom:20px;"></div>
+        <div class="back-link" onclick="toggleAllStores(true)">Show all customers →</div>
+      </div>
+      <div id="stores-all-view" style="display:none;">
+        <div class="back-link" onclick="toggleAllStores(false)">← Back to top/needs attention</div>
+        <div class="tile-grid" id="store-tiles"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-products">
+      <div id="products-top-bottom">
+        <h2 class="section-label">Top performers — tap any product to see its trend</h2>
+        <div class="tile-grid" id="product-top-tiles" style="margin-bottom:28px;"></div>
+        <h2 class="section-label">Slow movers — worth a push or a discount</h2>
+        <div class="tile-grid" id="product-bottom-tiles" style="margin-bottom:20px;"></div>
+        <div class="back-link" onclick="toggleAllProducts(true)">Show all 25 products →</div>
+      </div>
+      <div id="products-all-view" style="display:none;">
+        <div class="back-link" onclick="toggleAllProducts(false)">← Back to top/slow movers</div>
+        <table class="preview-table" style="font-size:13px;">
+          <thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th></tr></thead>
+          <tbody id="product-all-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-routes">
+      <div id="routes-grid-view">
+        <h2 class="section-label">Tap a route to see the customers on it, for planning driving days.</h2>
+        <div class="tile-grid" id="route-tiles"></div>
+      </div>
+      <div id="routes-drilldown-view" style="display:none;">
+        <div class="back-link" onclick="showRouteGrid()">← Back to all routes</div>
+        <h2 class="section-label" id="route-drilldown-label"></h2>
+        <div class="tile-grid" id="route-drilldown-stores"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-trends">
+      <div class="trend-note" id="trend-note"></div>
+
+      <div class="pulse-card" style="margin-bottom:20px;">
+        <p class="pulse-label">Cash Collected — exact trailing window</p>
+        <div style="display:flex;gap:8px;margin:10px 0 16px;">
+          <button class="range-btn" data-days="30" onclick="setPaymentRange(30)">Last 30 days</button>
+          <button class="range-btn" data-days="90" onclick="setPaymentRange(90)">Last 90 days</button>
+          <button class="range-btn" data-days="180" onclick="setPaymentRange(180)">Last 6 months</button>
+        </div>
+        <div id="range-stats"></div>
+      </div>
+
+      <div id="pulse-payments"></div>
+      <div id="pulse-revenue"></div>
+      <div id="pulse-ar"></div>
+    </div>
+
+    <div class="panel" id="panel-upload">
+      <div class="dropzone" id="dropzone">
+        <div><b>Drop PDFs here</b> or click to browse</div>
+        <div style="font-size:12px;margin-top:6px;">Sales by Customer, Sales by Item, Customer Balance Summary, Payments Received, or a Square Sales Report — drop several at once.</div>
+        <input type="file" id="file-input" accept="application/pdf" multiple>
+      </div>
+      <div id="upload-results"></div>
+    </div>
+  </div>
+
+  <footer>Antari NYC · data refreshes on page load</footer>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-rank" id="modal-rank"></div>
+    <h3 id="modal-name"></h3>
+    <div class="modal-row" id="row-revenue"><span class="k">Revenue</span><span class="v" id="modal-revenue"></span></div>
+    <div class="modal-row" id="row-invoices"><span class="k">Invoices</span><span class="v" id="modal-invoices"></span></div>
+    <div class="modal-row" id="row-payment"><span class="k">Last Payment</span><span class="v" id="modal-payment"></span></div>
+    <div class="modal-row" id="modal-ar-row" style="display:none;"><span class="k">Outstanding Balance</span><span class="v"><span class="red-text" id="modal-ar"></span><button type="button" class="paid-btn" id="modal-paid-btn">Paid</button></span></div>
+    <div class="modal-row" id="row-avgorder"><span class="k">Avg Order Value</span><span class="v" id="modal-avgorder"></span></div>
+    <div class="modal-row" id="row-share"><span class="k">Share of store &amp; restaurant revenue</span><span class="v" id="modal-share"></span></div>
+    <div class="modal-row" id="row-cadence"><span class="k">Avg Days Between Payments</span><span class="v" id="modal-cadence"></span></div>
+    <div class="modal-row" id="row-population" style="display:none;"><span class="k">Population</span><span class="v" id="modal-population"></span></div>
+    <div class="modal-row" id="row-majority" style="display:none;"><span class="k">Majority Group</span><span class="v" id="modal-majority"></span></div>
+    <div class="modal-row" id="row-notes" style="display:none;flex-direction:column;gap:4px;"><span class="k">Notes</span><span class="v" id="modal-notes" style="font-weight:400;text-align:left;"></span></div>
+    <button class="modal-close" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="gm-backdrop"><div class="modal" id="gm-modal"></div></div>
+<div id="toast"><span id="toast-msg"></span><button type="button" id="toast-undo" style="display:none;">Undo</button></div>
+
+<script>
+  console.log("CHECKPOINT 1: script started");
+  const SUPABASE_URL = "https://hzufqpoauamlhkaoaacx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_1Rw5PxX0FCzqFwe4Qi-H-Q_xKystG52";
+
+  let sb;
+  try {
+    if (!window.supabase) throw new Error("Supabase library failed to load from CDN");
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log("CHECKPOINT 2: supabase client created OK", sb);
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+  } catch (initErr) {
+    console.log("CHECKPOINT 2 FAILED:", initErr);
+    document.getElementById("auth-gate").innerHTML =
+      `<div class="auth-box"><p style="color:var(--red);font-weight:600;">Couldn't load required libraries.</p>
+       <p style="color:var(--muted);font-size:13px;">This is usually a slow connection, an ad-blocker, or a network issue blocking cdn.jsdelivr.net.
+       Try refreshing the page, or disabling any content-blocking extension for this site.</p></div>`;
+    document.getElementById("auth-gate").style.display = "block";
+    throw initErr; // stop here, nothing below can safely run without sb
+  }
+
+  const fmt = n => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtCompact = n => { const v = Number(n); return v >= 1000 ? "$" + (v/1000).toFixed(1) + "k" : fmt(v); };
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No payments yet";
+  const ordinal = n => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); };
+
+  let storeData = [];
+  let openBalances = [];   // rows from v_open_balances, refreshed on every load()
+
+  // ---------------- Small helpers ----------------
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const parseYmd = s => new Date(s + "T00:00:00");
+  const shortDate = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const daysSince = s => { const n = new Date(); return Math.round((new Date(n.getFullYear(), n.getMonth(), n.getDate()) - parseYmd(s)) / 86400000); };
+  const cents = n => Math.round(Number(n) * 100);
+  // A customer is shown under its store's name when linked to one, otherwise under the name Zoho uses.
+  const displayNameOf = r => (r.mapped_store && r.mapped_store !== "Other") ? r.mapped_store : r.zoho_name;
+
+  // ---------------- Generic modal + toast ----------------
+  function gmOpen(html, wide) {
+    const m = document.getElementById("gm-modal");
+    m.className = "modal" + (wide ? " wide" : "");
+    m.innerHTML = html;
+    document.getElementById("gm-backdrop").classList.add("open");
+  }
+  function gmClose() { document.getElementById("gm-backdrop").classList.remove("open"); }
+  document.getElementById("gm-backdrop").addEventListener("click", e => { if (e.target.id === "gm-backdrop") gmClose(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { gmClose(); closeModal(); } });
+
+  let toastTimer = null;
+  function hideToast() { document.getElementById("toast").style.display = "none"; }
+  function showToast(msg, undoFn) {
+    const t = document.getElementById("toast"), u = document.getElementById("toast-undo");
+    document.getElementById("toast-msg").textContent = msg;
+    u.disabled = false;
+    if (undoFn) { u.style.display = "inline"; u.onclick = async () => { u.disabled = true; await undoFn(); }; }
+    else { u.style.display = "none"; u.onclick = null; }
+    t.style.display = "flex";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, undoFn ? 12000 : 4000);
+  }
+
+  // ---------------- Line chart (one muted colour; hollow dashed point = period still in progress) ----------------
+  function buildPulseSvg(points, fmtVal) {
+    const lineColor = "#1B3A7A";
+    const W = 600, H = 150, PAD_X = 40, PAD_Y = 34;
+    const vals = points.map(p => p.value);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = (max - min) || 1;
+    const xStep = points.length > 1 ? (W - PAD_X * 2) / (points.length - 1) : 0;
+    const coords = points.map((p, i) => ({
+      ...p,
+      x: points.length === 1 ? W / 2 : PAD_X + i * xStep,
+      y: PAD_Y + (H - PAD_Y * 2) * (1 - (p.value - min) / range),
+    }));
+    const seg = (a, b) => { const mx = (a.x + b.x) / 2; return `M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}`; };
+    let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;">`;
+    for (let i = 1; i < coords.length; i++) {
+      svg += `<path d="${seg(coords[i - 1], coords[i])}" fill="none" stroke="${lineColor}" stroke-width="1.75" stroke-linecap="round" opacity="0.85"${coords[i].partial ? ' stroke-dasharray="5 4"' : ""}/>`;
+    }
+    for (const c of coords) {
+      svg += c.partial
+        ? `<circle cx="${c.x}" cy="${c.y}" r="3" fill="#fff" stroke="${lineColor}" stroke-width="1.5"/>`
+        : `<circle cx="${c.x}" cy="${c.y}" r="2.5" fill="${lineColor}"/>`;
+      svg += `<text x="${c.x}" y="${c.y - 10}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#2B2118" font-family="-apple-system,sans-serif">${fmtVal(c.value)}</text>`;
+      svg += `<text x="${c.x}" y="${H - 6}" text-anchor="middle" font-size="9.5" fill="#7A6F60">${esc(c.label)}</text>`;
+    }
+    return svg + `</svg>`;
+  }
+
+  // ---------------- Record a payment (the "Paid" button) ----------------
+  function openPaymentModal(displayName) {
+    const rows = openBalances.filter(r => displayNameOf(r) === displayName);
+    if (!rows.length) { showToast("Nothing outstanding for " + displayName); return; }
+    const totalC = rows.reduce((s, r) => s + cents(r.outstanding_balance), 0);
+    const snapC = rows.reduce((s, r) => s + cents(r.snapshot_balance), 0);
+    const paidC = rows.reduce((s, r) => s + cents(r.paid_since_snapshot), 0);
+    const total = totalC / 100;
+    gmOpen(`
+      <div class="modal-rank">Record a payment</div>
+      <h3>${esc(displayName)}</h3>
+      <div class="modal-row"><span class="k">Outstanding now</span><span class="v red-text">${fmt(total)}</span></div>
+      <div class="pay-options">
+        <button type="button" class="pay-opt active" data-mode="full">Full balance<small>${fmt(total)}</small></button>
+        <button type="button" class="pay-opt" data-mode="part">Part of it<small>enter an amount</small></button>
+      </div>
+      <div id="pay-part-wrap" style="display:none;">
+        <label class="field-label" for="pay-amount">Amount paid</label>
+        <input class="field-input" id="pay-amount" type="number" inputmode="decimal" step="0.01" min="0.01" max="${total}" placeholder="0.00">
+      </div>
+      <label class="field-label" for="pay-date">Paid on</label>
+      <input class="field-input" id="pay-date" type="date" value="${ymd(new Date())}">
+      <div class="pay-error" id="pay-error"></div>
+      <div class="pay-note">Zoho showed ${fmt(snapC / 100)} owed as of ${fmtDate(rows[0].as_of_date)}${paidC ? `; ${fmt(paidC / 100)} already recorded here since` : ""}. This only updates this dashboard — record the payment in Zoho too so your next export matches.</div>
+      <div class="modal-actions"><button type="button" class="btn-ghost" id="pay-cancel">Cancel</button><button type="button" class="btn-solid" id="pay-confirm">Record payment</button></div>
+    `);
+    let mode = "full";
+    const m = document.getElementById("gm-modal");
+    m.querySelectorAll(".pay-opt").forEach(b => b.addEventListener("click", () => {
+      mode = b.dataset.mode;
+      m.querySelectorAll(".pay-opt").forEach(x => x.classList.toggle("active", x === b));
+      document.getElementById("pay-part-wrap").style.display = mode === "part" ? "block" : "none";
+      document.getElementById("pay-error").textContent = "";
+      if (mode === "part") document.getElementById("pay-amount").focus();
+    }));
+    document.getElementById("pay-cancel").addEventListener("click", gmClose);
+    document.getElementById("pay-confirm").addEventListener("click", async () => {
+      const err = document.getElementById("pay-error");
+      let amountC = totalC;
+      if (mode === "part") {
+        amountC = cents(document.getElementById("pay-amount").value);
+        if (!(amountC > 0)) { err.textContent = "Enter the amount that was paid."; return; }
+        if (amountC > totalC) { err.textContent = `That's more than the ${fmt(total)} outstanding.`; return; }
+      }
+      const paidOn = document.getElementById("pay-date").value;
+      if (!paidOn) { err.textContent = "Pick the date it was paid."; return; }
+      const btn = document.getElementById("pay-confirm");
+      btn.disabled = true; btn.textContent = "Saving…";
+      // spread across this customer's balance rows, largest first
+      let left = amountC; const inserts = [];
+      for (const r of [...rows].sort((a, b) => cents(b.outstanding_balance) - cents(a.outstanding_balance))) {
+        if (left <= 0) break;
+        const take = Math.min(left, cents(r.outstanding_balance));
+        inserts.push({ balance_id: r.balance_id, amount: take / 100, paid_on: paidOn });
+        left -= take;
+      }
+      const { data, error } = await sb.from("balance_payments").insert(inserts).select("id");
+      if (error) { err.textContent = "Couldn't save: " + error.message; btn.disabled = false; btn.textContent = "Record payment"; return; }
+      const ids = data.map(d => d.id);
+      gmClose(); closeModal();
+      showToast(`Recorded ${fmt(amountC / 100)} from ${displayName}`, async () => {
+        const { error: delErr } = await sb.from("balance_payments").delete().in("id", ids);
+        showToast(delErr ? "Couldn't undo: " + delErr.message : "Payment removed.");
+        load();
+      });
+      load();
+    });
+  }
+
+  // ---------------- Modal ----------------
+  function setStoreModeRows(isStore) {
+    ["row-revenue","row-invoices","row-payment","row-avgorder","row-share","row-cadence"].forEach(id => document.getElementById(id).style.display = isStore ? "flex" : "none");
+    ["row-population","row-majority","row-notes"].forEach(id => document.getElementById(id).style.display = isStore ? "none" : "flex");
+  }
+
+  function openModal(store) {
+    setStoreModeRows(true);
+    document.getElementById("modal-rank").textContent = Number(store.total_revenue) > 0 ? ordinal(store.revenue_rank) + " by revenue" : "No sales yet";
+    document.getElementById("modal-name").textContent = store.store_name;
+    document.getElementById("modal-revenue").textContent = fmt(store.total_revenue);
+    document.getElementById("modal-invoices").textContent = store.invoices;
+    document.getElementById("modal-payment").textContent = fmtDate(store.last_payment_date);
+    const arRow = document.getElementById("modal-ar-row");
+    if (store.outstanding_balance && Number(store.outstanding_balance) > 0) {
+      arRow.style.display = "flex";
+      document.getElementById("modal-ar").textContent = fmt(store.outstanding_balance);
+    } else arRow.style.display = "none";
+    document.getElementById("modal-paid-btn").onclick = () => openPaymentModal(store.store_name);
+    document.getElementById("modal-avgorder").textContent = store.invoices > 0 ? fmt(store.total_revenue / store.invoices) : "—";
+    document.getElementById("modal-share").textContent = store.sharePct != null ? store.sharePct.toFixed(1) + "%" : "—";
+    document.getElementById("modal-cadence").textContent = store.avgDaysBetween ? "~" + Math.round(store.avgDaysBetween) + " days" : "Not enough data yet";
+    document.getElementById("modal-backdrop").classList.add("open");
+  }
+
+  function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+  document.getElementById("modal-backdrop").addEventListener("click", e => { if (e.target.id === "modal-backdrop") closeModal(); });
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ---------------- Auth (gates the entire dashboard now) ----------------
+  async function refreshAuthUI() {
+    console.log("CHECKPOINT 3: refreshAuthUI called, about to call getSession()");
+    let session = null;
+    try {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("getSession() timed out after 5s")), 5000));
+      const result = await Promise.race([sb.auth.getSession(), timeout]);
+      console.log("CHECKPOINT 4: getSession() returned", result);
+      session = result.data.session;
+    } catch (sessionErr) {
+      console.log("CHECKPOINT 4 FAILED: getSession() threw", sessionErr);
+      document.getElementById("auth-gate").style.display = "block";
+      return;
+    }
+    const badge = document.getElementById("auth-badge");
+    if (session) {
+      console.log("CHECKPOINT 5: session found, showing dashboard");
+      badge.innerHTML = `<span>${session.user.email}</span><button onclick="signOut()">Sign out</button>`;
+      document.getElementById("auth-gate").style.display = "none";
+      document.getElementById("status").style.display = "block";
+      load();
+    } else {
+      console.log("CHECKPOINT 5: no session, showing login form now");
+      badge.innerHTML = "";
+      document.getElementById("auth-gate").style.display = "block";
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "none";
+    }
+    console.log("CHECKPOINT 6: refreshAuthUI finished");
+  }
+  async function signIn() {
+    const email = document.getElementById("auth-email").value;
+    const password = document.getElementById("auth-password").value;
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    document.getElementById("auth-msg").textContent = error ? error.message : "Signed in.";
+    if (!error) refreshAuthUI();
+  }
+  async function signUp() {
+    const email = document.getElementById("auth-email").value;
+    const password = document.getElementById("auth-password").value;
+    const { error } = await sb.auth.signUp({ email, password });
+    document.getElementById("auth-msg").textContent = error ? error.message
+      : "Account created. If email confirmation is required, check your inbox — otherwise you're signed in.";
+    refreshAuthUI();
+  }
+  async function signOut() { await sb.auth.signOut(); refreshAuthUI(); }
+  sb.auth.onAuthStateChange(() => refreshAuthUI());
+
+  // ---------------- PDF parsing ----------------
+  function money(s) { return parseFloat(String(s).replace(/[,$]/g, "")); }
+  const MONTHS = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+  function parseDateLong(d) {
+    const m = d.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+    return m ? `${m[3]}-${MONTHS[m[2]]}-${m[1].padStart(2,'0')}` : null;
+  }
+
+  function detectType(text) {
+    if (/Sales by Customer/i.test(text)) return 'sales_customer';
+    if (/Sales by Item/i.test(text)) return 'sales_item';
+    if (/Customer Balance Summary/i.test(text)) return 'customer_balances';
+    if (/Payments Received/i.test(text)) return 'payments_received';
+    if (/Sales Report/i.test(text) && /ITEM SALES/i.test(text)) return 'festival_square';
+    return 'unknown';
+  }
+
+  function extractPeriod(text) {
+    const m = text.match(/From\s+(\d{1,2}\s+\w{3}\s+\d{4})\s+To\s+(\d{1,2}\s+\w{3}\s+\d{4})/i);
+    if (m) return { start: parseDateLong(m[1]), end: parseDateLong(m[2]) };
+    const asOf = text.match(/As of\s+(\d{1,2}\s+\w{3}\s+\d{4})/i);
+    if (asOf) return { asOf: parseDateLong(asOf[1]) };
+    return {};
+  }
+
+  function parseSalesCustomer(text) {
+    const rows = [];
+    const re = /^(.+?)\s+(\d+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Name\s+Invoice/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ zoho_name: m[1].trim(), invoice_count: parseInt(m[2]), sales: money(m[3]) });
+    }
+    return rows;
+  }
+  function parseSalesItem(text) {
+    const rows = [];
+    const re = /^(.+?)\s+(\S+)\s+([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Item Name/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ item_name: m[1].trim(), sku: m[2], quantity_sold: money(m[3]), sales: money(m[4]) });
+    }
+    return rows;
+  }
+  function parseBalances(text) {
+    const rows = [];
+    const re = /^(.+?)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+Dr\s+\$([\d,]+\.\d{2})\s+Dr$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^TOTAL\b/i.test(line) || /^Customer Name/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ zoho_name: m[1].trim(), outstanding_balance: money(m[4]) });
+    }
+    return rows;
+  }
+  function parsePayments(text) {
+    const rows = [];
+    const re = /^\d+\s+(\d{1,2}\s+\w{3}\s+\d{4})\s+Paid\s+(.+?)\s+(Check|Cash)\s+(INV-\d+)\s+[\w\s]+?\s+\$([\d,]+\.\d{2})/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^Payment Number/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ payment_date: parseDateLong(m[1]), zoho_name: m[2].trim(), payment_mode: m[3], invoice_number: m[4], amount: money(m[5]) });
+    }
+    return rows;
+  }
+  function parseFestivalSquare(text) {
+    const rows = [];
+    let inItems = false;
+    const re = /^(.+?)\s+×\s+(\d+)\s+\$([\d,]+\.\d{2})$/;
+    for (const line of text.split('\n').map(l=>l.trim()).filter(Boolean)) {
+      if (/^ITEM SALES/i.test(line)) { inItems = true; continue; }
+      if (!inItems) continue;
+      if (/^©/.test(line)) break;
+      if (/^Regular\s+×/i.test(line)) continue;
+      const m = line.match(re);
+      if (m) rows.push({ item_name: m[1].trim(), quantity_sold: parseInt(m[2]), sales: money(m[3]) });
+    }
+    const pm = text.match(/(\w{3})\s+(\d{1,2}),\s+(\d{4}).*?-\s*(\w{3})\s+(\d{1,2}),\s+(\d{4})/);
+    let period = {};
+    if (pm) period = { start: `${pm[3]}-${MONTHS[pm[1]]}-${pm[2].padStart(2,'0')}`, end: `${pm[6]}-${MONTHS[pm[4]]}-${pm[5].padStart(2,'0')}` };
+    return { rows, period };
+  }
+
+  async function extractTextFromPdf(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const lines = {};
+      for (const item of content.items) {
+        const y = Math.round(item.transform[5]);
+        if (!lines[y]) lines[y] = [];
+        lines[y].push(item);
+      }
+      const ys = Object.keys(lines).map(Number).sort((a,b) => b - a);
+      text += ys.map(y => lines[y].sort((a,b) => a.transform[4]-b.transform[4]).map(i=>i.str).join(' ')).join('\n') + '\n';
+    }
+    return text;
+  }
+
+  const TYPE_LABELS = {
+    sales_customer: "Sales by Customer", sales_item: "Sales by Item",
+    customer_balances: "Customer Balance Summary", payments_received: "Payments Received",
+    festival_square: "Square Festival Report", unknown: "Unrecognized format",
+  };
+
+  let uploadQueue = [];
+
+  async function handleFiles(files) {
+    for (const file of files) {
+      const id = Math.random().toString(36).slice(2);
+      const card = document.createElement("div");
+      card.className = "upload-card";
+      card.id = "uc-" + id;
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">${file.name}</span><span class="uc-badge warn">Reading…</span></div>`;
+      document.getElementById("upload-results").prepend(card);
+
+      try {
+        const text = await extractTextFromPdf(file);
+        const type = detectType(text);
+        const period = extractPeriod(text);
+        let rows = [];
+        if (type === 'sales_customer') rows = parseSalesCustomer(text);
+        else if (type === 'sales_item') rows = parseSalesItem(text);
+        else if (type === 'customer_balances') rows = parseBalances(text);
+        else if (type === 'payments_received') rows = parsePayments(text);
+        else if (type === 'festival_square') { const r = parseFestivalSquare(text); rows = r.rows; Object.assign(period, r.period); }
+
+        renderUploadCard(id, file.name, type, period, rows);
+      } catch (err) {
+        card.innerHTML = `<div class="uc-header"><span class="uc-title">${file.name}</span><span class="uc-badge err">Failed</span></div><div class="uc-note">${err.message}</div>`;
+      }
+    }
+  }
+
+  function renderUploadCard(id, filename, type, period, rows) {
+    const card = document.getElementById("uc-" + id);
+    if (type === 'unknown' || rows.length === 0) {
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">${filename}</span><span class="uc-badge err">Not recognized</span></div>
+        <div class="uc-note">Couldn't detect a known report type, or found 0 rows. This file won't be imported.</div>`;
+      return;
+    }
+    const previewRows = rows.slice(0, 5);
+    const cols = Object.keys(previewRows[0]);
+    const tableHtml = `<table class="preview-table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${previewRows.map(r => `<tr>${cols.map(c=>`<td>${r[c]}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const periodStr = period.start ? `${period.start} → ${period.end}` : period.asOf ? `as of ${period.asOf}` : "unknown period";
+
+    card.innerHTML = `
+      <div class="uc-header"><span class="uc-title">${filename}</span><span class="uc-badge ok">${TYPE_LABELS[type]}</span></div>
+      <div class="uc-type">${periodStr} · ${rows.length} rows parsed (showing first 5)</div>
+      ${tableHtml}
+      <div class="uc-actions">
+        <button class="btn-import" onclick="importRows('${id}')">Import ${rows.length} rows</button>
+        <button class="btn-dismiss" onclick="document.getElementById('uc-${id}').remove()">Dismiss</button>
+      </div>
+      <div class="uc-note">Review the preview above — if something looks wrong, dismiss instead of importing.</div>
+    `;
+    uploadQueue[id] = { type, period, rows };
+  }
+
+  async function importRows(id) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { alert("Please sign in first."); return; }
+    const { type, period, rows } = uploadQueue[id];
+    const card = document.getElementById("uc-" + id);
+    let payload = [];
+    if (type === 'sales_customer') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+    else if (type === 'sales_item') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+    else if (type === 'customer_balances') payload = rows.map(r => ({...r, as_of_date: period.asOf}));
+    else if (type === 'payments_received') payload = rows;
+    else if (type === 'festival_square') payload = rows.map(r => ({...r, period: `${period.start} to ${period.end}`, period_start: period.start, period_end: period.end}));
+
+    const table = { sales_customer: 'sales_customer', sales_item: 'sales_item', customer_balances: 'customer_balances', payments_received: 'payments_received', festival_square: 'festival_sales' }[type];
+    const { error } = await sb.from(table).insert(payload);
+    if (error) {
+      card.querySelector('.uc-actions').insertAdjacentHTML('beforeend', `<span style="color:var(--red);font-size:12px;">Error: ${error.message}</span>`);
+    } else {
+      card.innerHTML = `<div class="uc-header"><span class="uc-title">Imported ✓</span><span class="uc-badge ok">${rows.length} rows added</span></div>`;
+      setTimeout(() => location.reload(), 1200);
+    }
+  }
+
+  const dropzone = document.getElementById("dropzone");
+  dropzone.addEventListener("click", () => document.getElementById("file-input").click());
+  document.getElementById("file-input").addEventListener("change", e => handleFiles(e.target.files));
+  dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("drag"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+  dropzone.addEventListener("drop", e => {
+    e.preventDefault(); dropzone.classList.remove("drag");
+    handleFiles(e.dataTransfer.files);
+  });
+
+  // ---------------- Main dashboard load ----------------
+  async function load() {
+    try {
+      // Each query is named, and results are read back BY NAME — so a reordering typo can't scramble the data again.
+      const queries = {
+        storeRank:  sb.from("v_store_ranking").select("*").order("revenue_rank"),
+        prodRank:   sb.from("v_product_ranking").select("*").order("revenue_rank"),
+        ar:         sb.from("v_accounts_receivable").select("*"),
+        zip:        sb.from("v_zip_ranking").select("*").order("revenue_rank"),
+        route:      sb.from("v_route_summary").select("*"),
+        channel:    sb.from("v_channel_summary").select("*"),
+        other:      sb.from("v_other_bucket").select("*"),
+        stores:     sb.from("stores").select("store_name,zip,delivery_route,category"),
+        monthlyW:   sb.from("v_monthly_wholesale").select("*"),
+        monthlyF:   sb.from("v_monthly_festival").select("*"),
+        monthlyAR:  sb.from("v_monthly_ar").select("*"),
+        monthlyPay: sb.from("v_monthly_payments").select("*"),
+        demo:       sb.from("zip_demographics").select("*"),
+        ancestry:   sb.from("zip_ancestry").select("*"),
+        payMapped:  sb.from("v_payments_mapped").select("payment_date,mapped_store,zoho_name,amount"),
+        mappedRows: sb.from("v_sales_customer_mapped").select("zoho_name,mapped_store,sales,invoice_count,period_start,period_end"),
+        openBal:    sb.from("v_open_balances").select("*"),
+        itemRows:   sb.from("sales_item").select("item_name,sku,quantity_sold,sales,period_start,period_end"),
+        festRows:   sb.from("festival_sales").select("period_start,period_end"),
+      };
+      const queryKeys = Object.keys(queries);
+      const queryResults = await Promise.all(Object.values(queries));
+      const R = {};
+      queryKeys.forEach((k, i) => {
+        if (queryResults[i].error) throw new Error(`${k}: ${queryResults[i].error.message}`);
+        R[k] = queryResults[i];
+      });
+      const { storeRank, prodRank, ar, zip, route, channel, other, stores, monthlyW, monthlyF, monthlyAR, monthlyPay, demo, ancestry, payMapped, mappedRows, openBal, itemRows, festRows } = R;
+      openBalances = openBal.data;
+
+      const wholesale = Number(channel.data.find(c => c.channel === "Wholesale")?.net_revenue || 0);
+      const direct = Number(channel.data.find(c => c.channel === "Direct / Festival")?.net_revenue || 0);
+      const arTotal = ar.data.reduce((s, r) => s + Number(r.outstanding_balance), 0);
+      const o = other.data[0] || { total_revenue: 0, invoices: 0 };
+
+      document.getElementById("kpi-total").textContent = fmtCompact(wholesale + direct);
+      document.getElementById("kpi-wholesale").textContent = fmtCompact(wholesale);
+      document.getElementById("kpi-direct").textContent = fmtCompact(direct);
+      document.getElementById("kpi-ar").textContent = fmtCompact(arTotal);
+      document.getElementById("kpi-other").textContent = fmtCompact(o.total_revenue);
+
+      // ---------------- Overview: your real customers = stores + restaurants. Everyone else is "Other" and is never ranked. ----------------
+      const nameOf = displayNameOf;
+      const categoryOf = Object.fromEntries(stores.data.map(s => [s.store_name, s.category]));
+      const custMap = {};
+      for (const r of mappedRows.data) {
+        const n = nameOf(r);
+        const c = custMap[n] || (custMap[n] = { name: n, revenue: 0, invoices: 0, listed: r.mapped_store !== "Other", category: categoryOf[n] || "" });
+        c.revenue += Number(r.sales);
+        c.invoices += Number(r.invoice_count);
+      }
+      const allBuyers = Object.values(custMap);
+      const customers = allBuyers.filter(c => c.listed);      // stores + restaurants that bought in this period
+      const otherBuyers = allBuyers.filter(c => !c.listed);   // individuals / one-offs: summarized, never ranked
+      const salesStarts = mappedRows.data.map(r => r.period_start).filter(Boolean).sort();
+      const salesEnds = mappedRows.data.map(r => r.period_end).filter(Boolean).sort();
+      const salesSpanDays = salesStarts.length ? Math.round((parseYmd(salesEnds[salesEnds.length - 1]) - parseYmd(salesStarts[0])) / 86400000) + 1 : null;
+      const invoiceText = c => `${c.category ? esc(c.category) + " · " : ""}${c.invoices} invoice${c.invoices === 1 ? "" : "s"}${salesSpanDays ? ` in ${salesSpanDays} days` : ""}`;
+      const unlistedTag = c => c.listed ? "" : `<span class="tag-unlisted">other buyer</span>`;
+      const ovRow = (c, sub, valueHtml) => `<div class="ov-row"><div class="ov-line"><span class="ov-name">${esc(c.name)}${unlistedTag(c)}</span><span class="ov-val">${valueHtml}</span></div>${sub ? `<div class="ov-sub">${sub}</div>` : ""}</div>`;
+      const emptyNote = txt => `<div class="empty-note">${txt}</div>`;
+
+      const byRev = [...customers].sort((a, b) => b.revenue - a.revenue);
+      const topN = byRev.slice(0, 5);
+      const bottomN = byRev.slice(topN.length).slice(-5).reverse();   // never repeats someone already in the top list
+      document.getElementById("ov-top-label").textContent = topN.length ? `Top ${topN.length} customers` : "Top customers";
+      document.getElementById("ov-bottom-label").textContent = bottomN.length ? `Bottom ${bottomN.length} customers` : "Bottom customers";
+      document.getElementById("ov-top").innerHTML = topN.map(c => ovRow(c, invoiceText(c), fmt(c.revenue))).join("") || emptyNote("No store or restaurant purchases loaded yet.");
+      document.getElementById("ov-bottom").innerHTML = bottomN.map(c => ovRow(c, invoiceText(c), fmt(c.revenue))).join("") || emptyNote("Not enough customers yet to show a separate bottom list.");
+
+      const lastPaidBy = {};
+      for (const p of payMapped.data) {
+        const n = nameOf(p);
+        if (!lastPaidBy[n] || p.payment_date > lastPaidBy[n]) lastPaidBy[n] = p.payment_date;
+      }
+      const stale = customers.filter(c => lastPaidBy[c.name])
+        .map(c => ({ ...c, last: lastPaidBy[c.name], days: daysSince(lastPaidBy[c.name]) }))
+        .sort((a, b) => b.days - a.days).slice(0, 5);
+      document.getElementById("ov-stale").innerHTML = stale.map(c => ovRow(c, `Last paid ${fmtDate(c.last)} · ${fmt(c.revenue)} total`, `${c.days} days ago`)).join("") || emptyNote("No payment history yet.");
+
+      // Money owed is shown for EVERYONE (including other buyers) — an unpaid balance matters whoever owes it.
+      const owedMap = {};
+      for (const r of openBalances) {
+        const n = nameOf(r);
+        const x = owedMap[n] || (owedMap[n] = { name: n, cents: 0, listed: r.mapped_store !== "Other" });
+        x.cents += cents(r.outstanding_balance);
+      }
+      const owedList = Object.values(owedMap).sort((a, b) => b.cents - a.cents);
+      window.__owedNames = owedList.map(x => x.name);
+      document.getElementById("ov-owed").innerHTML = owedList.map((x, i) =>
+        ovRow(x, "", `<span class="red-text">${fmt(x.cents / 100)}</span><button type="button" class="paid-btn" data-pay="${i}">Paid</button>`)).join("") || emptyNote("Nothing owed to you right now.");
+      document.getElementById("ov-owed").onclick = e => {
+        const b = e.target.closest("[data-pay]");
+        if (b) openPaymentModal(window.__owedNames[Number(b.dataset.pay)]);
+      };
+
+      const noSalesCount = storeRank.data.filter(s => Number(s.total_revenue) === 0).length;
+      document.getElementById("ov-footnote").textContent =
+        `Rankings include only your ${stores.data.length} stores and restaurants, as named in Zoho, ${salesStarts.length ? fmtDate(salesStarts[0]) + " – " + fmtDate(salesEnds[salesEnds.length - 1]) : "no period loaded"}. ` +
+        `Not ranked: ${otherBuyers.length} other buyers (individuals and one-time purchases) with ${fmt(otherBuyers.reduce((s, c) => s + c.revenue, 0))} in sales. ` +
+        `${noSalesCount} of your ${stores.data.length} customers had no purchases in this period — see the Customers tab. ` +
+        `"Last payment" is the closest thing to "last purchase"; Zoho's reports don't include invoice dates.`;
+
+      const storeMeta = Object.fromEntries(stores.data.map(s => [s.store_name, s]));
+      const arMap = Object.fromEntries(ar.data.map(a => [a.store_name, a.outstanding_balance]));
+
+      // cadence: avg days between payments, per store
+      const paysByStore = {};
+      for (const p of payMapped.data) {
+        if (!paysByStore[p.mapped_store]) paysByStore[p.mapped_store] = [];
+        paysByStore[p.mapped_store].push(p.payment_date);
+      }
+      const cadenceByStore = {};
+      for (const [store, dates] of Object.entries(paysByStore)) {
+        const sorted = dates.map(d => new Date(d + "T00:00:00")).sort((a,b) => a - b);
+        if (sorted.length < 2) continue;
+        let totalGap = 0;
+        for (let i = 1; i < sorted.length; i++) totalGap += (sorted[i] - sorted[i-1]) / (1000*60*60*24);
+        cadenceByStore[store] = totalGap / (sorted.length - 1);
+      }
+
+      const totalWholesale = storeRank.data.reduce((s, r) => s + Number(r.total_revenue), 0);
+
+      storeData = storeRank.data.map(s => ({
+        ...s,
+        zip: storeMeta[s.store_name]?.zip,
+        delivery_route: storeMeta[s.store_name]?.delivery_route,
+        category: storeMeta[s.store_name]?.category,
+        outstanding_balance: arMap[s.store_name] || 0,
+        avgDaysBetween: cadenceByStore[s.store_name] || null,
+        sharePct: totalWholesale > 0 ? (Number(s.total_revenue) / totalWholesale) * 100 : 0,
+      }));
+
+      function renderStoreTile(s, i) {
+        const zero = Number(s.total_revenue) === 0;
+        const owes = Number(s.outstanding_balance) > 0;
+        return `<div class="tile ${zero ? 'zero' : ''}" onclick='openModal(storeData[${i}])'>
+          <div class="rank">${zero ? '' : '#' + s.revenue_rank}</div>
+          <p class="name">${s.store_name}</p>
+          <div class="revenue">${fmtCompact(s.total_revenue)}</div>
+          <div class="sub">${s.category ? esc(s.category) + ' · ' : ''}${s.invoices} invoice${s.invoices === 1 ? '' : 's'}</div>
+          ${owes ? `<div class="owes">Owes ${fmt(s.outstanding_balance)}</div>` : ''}
+        </div>`;
+      }
+
+      document.getElementById("store-tiles").innerHTML = storeData.map((s, i) => renderStoreTile(s, i)).join("");
+
+      const byRevenueDesc = storeData.map((s, i) => ({...s, _i: i})).sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+      const topStores = byRevenueDesc.slice(0, 5);
+      // "Needs attention": zero-revenue stores first, then longest-since-payment among the rest
+      const zeroRevenue = byRevenueDesc.filter(s => Number(s.total_revenue) === 0);
+      const withGap = byRevenueDesc.filter(s => Number(s.total_revenue) > 0 && s.avgDaysBetween == null && s.last_payment_date)
+        .sort((a,b) => new Date(a.last_payment_date) - new Date(b.last_payment_date));
+      const attentionStores = [...zeroRevenue, ...withGap].slice(0, 5);
+      document.getElementById("store-top-tiles").innerHTML = topStores.map(s => renderStoreTile(s, s._i)).join("");
+      document.getElementById("store-attention-tiles").innerHTML = attentionStores.length
+        ? attentionStores.map(s => renderStoreTile(s, s._i)).join("")
+        : `<p style="color:var(--muted);font-size:13px;">Nothing needs attention right now.</p>`;
+      window.toggleAllStores = function(showAll) {
+        document.getElementById("stores-top-bottom").style.display = showAll ? "none" : "block";
+        document.getElementById("stores-all-view").style.display = showAll ? "block" : "none";
+      };
+
+      // ---------------- Products: Top 5 / Bottom 5 / All — tap any product for its trend ----------------
+      const sortedProducts = [...prodRank.data].sort((a, b) => Number(b.total_revenue) - Number(a.total_revenue));
+      const topProducts = sortedProducts.slice(0, 5);
+      const bottomProducts = sortedProducts.slice(-5).reverse();
+      const productTile = p => `<div class="tile" data-prod="${sortedProducts.indexOf(p)}"><div class="rank">#${p.revenue_rank}</div><p class="name">${esc(p.item_name)}</p>
+        <div class="revenue">${fmtCompact(p.total_revenue)}</div><div class="sub">${Number(p.units_sold).toLocaleString()} units</div></div>`;
+      document.getElementById("product-top-tiles").innerHTML = topProducts.map(productTile).join("");
+      document.getElementById("product-bottom-tiles").innerHTML = bottomProducts.map(productTile).join("");
+      document.getElementById("product-all-rows").innerHTML = sortedProducts.map((p, i) => `
+        <tr data-prod="${i}" style="cursor:pointer;"><td>${esc(p.item_name)}</td><td class="num">${Number(p.units_sold).toLocaleString()}</td><td class="num">${fmt(p.total_revenue)}</td></tr>`).join("");
+      window.toggleAllProducts = function(showAll) {
+        document.getElementById("products-top-bottom").style.display = showAll ? "none" : "block";
+        document.getElementById("products-all-view").style.display = showAll ? "block" : "none";
+      };
+      document.getElementById("panel-products").onclick = e => {
+        const el = e.target.closest("[data-prod]");
+        if (el) openProductModal(sortedProducts[Number(el.dataset.prod)]);
+      };
+
+      // Per-product history, grouped by the reporting period each upload covers
+      const periodsOf = {};
+      for (const r of itemRows.data) {
+        const byP = periodsOf[r.item_name] || (periodsOf[r.item_name] = {});
+        const key = r.period_start + "|" + r.period_end;
+        const p = byP[key] || (byP[key] = { start: r.period_start, end: r.period_end, units: 0, sales: 0 });
+        p.units += Number(r.quantity_sold);
+        p.sales += Number(r.sales);
+      }
+      const itemEnds = itemRows.data.map(r => r.period_end).filter(Boolean).sort();
+      const itemAnchor = itemEnds.length ? itemEnds[itemEnds.length - 1] : null;
+      const spanDaysOf = (s, e) => Math.round((parseYmd(e) - parseYmd(s)) / 86400000) + 1;
+      const monthName = key => new Date(key + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" });
+
+      function productMonthly(name) {
+        const months = {}, lumps = [];
+        for (const p of Object.values(periodsOf[name] || {})) {
+          if (spanDaysOf(p.start, p.end) <= 32) {
+            const key = p.end.slice(0, 7);
+            const m = months[key] || (months[key] = { key, label: monthName(key), units: 0, sales: 0 });
+            m.units += p.units; m.sales += p.sales;
+          } else {
+            lumps.push({ label: `${shortDate(parseYmd(p.start))} – ${shortDate(parseYmd(p.end))}`, days: spanDaysOf(p.start, p.end), units: p.units, sales: p.sales });
+          }
+        }
+        return { points: Object.values(months).sort((a, b) => a.key.localeCompare(b.key)), lumps };
+      }
+
+      function productWindow(name, days) {
+        if (!itemAnchor) return null;
+        const end = parseYmd(itemAnchor);
+        const curEdge = new Date(end); curEdge.setDate(curEdge.getDate() - days);
+        const prevEdge = new Date(curEdge); prevEdge.setDate(prevEdge.getDate() - days);
+        const cur = { units: 0, sales: 0, n: 0 }, prev = { units: 0, sales: 0, n: 0 };
+        for (const p of Object.values(periodsOf[name] || {})) {
+          const s = parseYmd(p.start), e = parseYmd(p.end);
+          const bucket = (s > curEdge && e <= end) ? cur : (s > prevEdge && e <= curEdge) ? prev : null;
+          if (bucket) { bucket.units += p.units; bucket.sales += p.sales; bucket.n++; }
+        }
+        const from = new Date(curEdge); from.setDate(from.getDate() + 1);
+        const pFrom = new Date(prevEdge); pFrom.setDate(pFrom.getDate() + 1);
+        return { cur, prev, from, to: end, pFrom, pTo: curEdge };
+      }
+
+      let currentProduct = null;
+      const pmNote = html => `<div class="trend-note" style="margin:12px 0 0;">${html}</div>`;
+      const pctTxt = (cur, prev) => prev > 0 ? `${cur >= prev ? "+" : "−"}${Math.abs(((cur - prev) / prev) * 100).toFixed(0)}%` : null;
+
+      function renderProductTrend(view) {
+        document.querySelectorAll("#pm-seg .range-btn").forEach(b => b.classList.toggle("active", b.dataset.v === view));
+        const body = document.getElementById("pm-body");
+        const name = currentProduct.item_name;
+        if (view === "month") {
+          const { points, lumps } = productMonthly(name);
+          const lumpText = lumps.map(l => `<b>${l.label}</b> (${l.days} days): ${Number(l.units).toLocaleString()} units · ${fmt(l.sales)}`).join("<br>");
+          if (points.length >= 2) {
+            body.innerHTML =
+              `<p class="pulse-label" style="margin-top:14px;">Units sold per month</p>${buildPulseSvg(points.map(m => ({ label: m.label, value: m.units })), v => Number(v).toLocaleString())}` +
+              `<p class="pulse-label" style="margin-top:8px;">Revenue per month</p>${buildPulseSvg(points.map(m => ({ label: m.label, value: m.sales })), fmtCompact)}` +
+              (lumpText ? pmNote(`Not drawn (these cover more than one month at once):<br>${lumpText}`) : "");
+          } else {
+            const one = points[0];
+            body.innerHTML = pmNote(
+              (one ? `Only one month on file so far — <b>${one.label}</b>: ${Number(one.units).toLocaleString()} units · ${fmt(one.sales)}.<br>` : "") +
+              (lumpText ? `The Sales by Item report on file covers more than one month at once:<br>${lumpText}<br>` : "") +
+              `That isn't enough for a month-by-month line yet. Pull Sales by Item <b>once per month</b> in Zoho and upload each one — the line draws itself once there are two months.`);
+          }
+          return;
+        }
+        const days = Number(view);
+        const w = productWindow(name, days);
+        if (!w || w.cur.n === 0) { body.innerHTML = pmNote(`No complete reporting period falls inside the last ${days} days of data.`); return; }
+        const du = pctTxt(w.cur.units, w.prev.units), ds = pctTxt(w.cur.sales, w.prev.sales);
+        body.innerHTML =
+          `<div class="modal-row" style="margin-top:12px;"><span class="k">Units sold</span><span class="v">${Number(w.cur.units).toLocaleString()}${du ? ` <span class="pulse-sub">(${du} vs prior)</span>` : ""}</span></div>` +
+          `<div class="modal-row"><span class="k">Revenue</span><span class="v">${fmt(w.cur.sales)}${ds ? ` <span class="pulse-sub">(${ds} vs prior)</span>` : ""}</span></div>` +
+          pmNote(`${shortDate(w.from)} – ${shortDate(w.to)} (${days} days). ${w.prev.n ? `Compared with ${shortDate(w.pFrom)} – ${shortDate(w.pTo)}.` : `No earlier report on file to compare against yet.`} Whole reporting periods only — a report that straddles the edge of the window is left out rather than split.`);
+      }
+
+      window.openProductModal = function(p) {
+        currentProduct = p;
+        const units = Number(p.units_sold), rev = Number(p.total_revenue);
+        const totalRev = sortedProducts.reduce((s, x) => s + Number(x.total_revenue), 0);
+        gmOpen(`
+          <div class="modal-rank">#${p.revenue_rank} of ${sortedProducts.length} by revenue</div>
+          <h3>${esc(p.item_name)}</h3>
+          <div class="modal-row"><span class="k">Units sold</span><span class="v">${units.toLocaleString()}</span></div>
+          <div class="modal-row"><span class="k">Revenue</span><span class="v">${fmt(rev)}</span></div>
+          <div class="modal-row"><span class="k">Avg price per unit</span><span class="v">${units > 0 ? fmt(rev / units) : "—"}</span></div>
+          <div class="modal-row"><span class="k">Share of wholesale product revenue</span><span class="v">${totalRev > 0 ? (rev / totalRev * 100).toFixed(1) + "%" : "—"}</span></div>
+          <div class="seg" id="pm-seg">
+            <button type="button" class="range-btn active" data-v="month">Month by month</button>
+            <button type="button" class="range-btn" data-v="90">Last 90 days</button>
+            <button type="button" class="range-btn" data-v="180">Last 6 months</button>
+          </div>
+          <div id="pm-body"></div>
+          <button type="button" class="modal-close" onclick="gmClose()">Close</button>`, true);
+        document.querySelectorAll("#pm-seg .range-btn").forEach(b => b.addEventListener("click", () => renderProductTrend(b.dataset.v)));
+        renderProductTrend("month");
+      };
+
+      // ---------------- Zip tiles: broad % + specific ancestry, combined into one readable line ----------------
+      const demoByZip = Object.fromEntries(demo.data.map(d => [d.zip, d]));
+      const ancestryByZip = {};
+      for (const a of ancestry.data) {
+        if (!ancestryByZip[a.zip]) ancestryByZip[a.zip] = [];
+        ancestryByZip[a.zip].push(a);
+      }
+      document.getElementById("zip-tiles").innerHTML = zip.data.map(z => {
+        const d = demoByZip[z.zip];
+        const groups = (ancestryByZip[z.zip] || []).slice(0, 3);
+        const namesOnly = groups.map(g => g.ancestry_group).join(", ");
+        let line = "No demographic data on file";
+        if (d && groups.length) {
+          line = `${d.majority_group} — mainly ${namesOnly}`;
+        } else if (d) {
+          line = d.majority_group;
+        } else if (groups.length) {
+          line = `Mainly ${namesOnly}`;
+        }
+        return `<div class="tile-xl" onclick="showZipDrilldown('${z.zip}')">
+          <div class="rank">#${z.revenue_rank}</div>
+          <p class="zipcode">${z.zip}</p>
+          <div class="revenue">${fmtCompact(z.total_revenue)}</div>
+          <div class="demo">${line}</div>
+        </div>`;
+      }).join("");
+
+      window.showZipDrilldown = function(zipCode) {
+        const storesInZip = storeData.map((s, i) => ({...s, _i: i})).filter(s => s.zip === zipCode)
+          .sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+        document.getElementById("zip-drilldown-label").textContent = `Customers in ${zipCode}`;
+        document.getElementById("zip-drilldown-stores").innerHTML = storesInZip.map(s => renderStoreTile(s, s._i)).join("")
+          || `<p style="color:var(--muted);font-size:13px;">No customers on file for this zip yet.</p>`;
+        document.getElementById("zips-grid-view").style.display = "none";
+        document.getElementById("zips-drilldown-view").style.display = "block";
+      };
+      window.showZipGrid = function() {
+        document.getElementById("zips-drilldown-view").style.display = "none";
+        document.getElementById("zips-grid-view").style.display = "block";
+      };
+
+      // ---------------- Routes: drill down to stores on that route ----------------
+      document.getElementById("route-tiles").innerHTML = route.data.map(r => `
+        <div class="tile-xl" onclick="showRouteDrilldown('${r.delivery_route.replace(/'/g, "\\'")}')">
+          <p class="zipcode" style="font-size:16px;">${r.delivery_route}</p>
+          <div class="revenue">${fmtCompact(r.total_revenue)}</div>
+          <div class="demo">${r.stores_on_route} customers</div>
+        </div>`).join("");
+
+      window.showRouteDrilldown = function(routeName) {
+        const storesOnRoute = storeData.map((s, i) => ({...s, _i: i})).filter(s => s.delivery_route === routeName)
+          .sort((a,b) => Number(b.total_revenue) - Number(a.total_revenue));
+        document.getElementById("route-drilldown-label").textContent = routeName;
+        document.getElementById("route-drilldown-stores").innerHTML = storesOnRoute.map(s => renderStoreTile(s, s._i)).join("")
+          || `<p style="color:var(--muted);font-size:13px;">No customers assigned to this route yet.</p>`;
+        document.getElementById("routes-grid-view").style.display = "none";
+        document.getElementById("routes-drilldown-view").style.display = "block";
+      };
+      window.showRouteGrid = function() {
+        document.getElementById("routes-drilldown-view").style.display = "none";
+        document.getElementById("routes-grid-view").style.display = "block";
+      };
+
+      // ---------------- Trends ----------------
+      const monthLabel = d => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short" });
+      const paymentDates = payMapped.data.map(p => parseYmd(p.payment_date));
+      const latestPaymentDate = paymentDates.length ? new Date(Math.max(...paymentDates)) : new Date();
+
+      document.getElementById("trend-note").textContent =
+        "The 30 / 90 / 180-day numbers use exact payment dates. The monthly lines use calendar months — a hollow, dashed point means that month isn't finished yet. " +
+        "Revenue and receivables can't show a trend until there is more than one report period.";
+
+      function renderPulse(containerId, title, points, opts = {}) {
+        const el = document.getElementById(containerId);
+        if (points.length === 0) {
+          el.innerHTML = `<div class="pulse-card"><p class="pulse-label">${title}</p><p style="color:var(--muted);font-size:13px;">No data yet.</p></div>`;
+          return;
+        }
+        if (points.length === 1) {
+          el.innerHTML = `<div class="pulse-card"><p class="pulse-label">${title}</p>
+            <p class="pulse-number" style="font-size:19px;">${fmt(points[0].value)}</p>
+            <p class="pulse-sub">${esc(points[0].label)}${opts.singleNote ? " — " + opts.singleNote : ""}</p></div>`;
+          return;
+        }
+        const complete = points.filter(p => !p.partial);
+        const inProgress = points.find(p => p.partial);
+        let headline, sub;
+        if (opts.kind === "snapshot") {
+          const last = points[points.length - 1], prev = points[points.length - 2];
+          const d = last.value - prev.value;
+          headline = fmt(last.value);
+          sub = `${d >= 0 ? "Up" : "Down"} ${fmt(Math.abs(d))} since ${prev.label} ${opts.sub || ""}`;
+        } else if (complete.length >= 3) {
+          const avg = (complete[complete.length - 1].value - complete[0].value) / (complete.length - 1);
+          headline = `${avg >= 0 ? "+" : "−"}${fmt(Math.abs(avg))}/month`;
+          sub = `${avg >= 0 ? "Up" : "Down"} on average across ${complete.length} full months`;
+        } else {
+          const last = complete[complete.length - 1];
+          headline = last ? `${last.label}: ${fmt(last.value)}` : "—";
+          sub = `${last ? "Latest full month. " : ""}A month-over-month trend needs at least 3 full months — you have ${complete.length}.`;
+        }
+        if (inProgress && opts.kind !== "snapshot") sub += ` ${inProgress.label} is still in progress (${fmt(inProgress.value)} so far, dashed).`;
+        el.innerHTML = `<div class="pulse-card">
+          <p class="pulse-label">${title}</p>
+          <p class="pulse-number" style="font-size:19px;color:var(--dark);">${headline}</p>
+          <p class="pulse-sub">${sub}</p>
+          ${buildPulseSvg(points, fmtCompact)}
+        </div>`;
+      }
+
+      renderPulse("pulse-payments", "Cash Collected by Month",
+        monthlyPay.data.map(m => {
+          const first = parseYmd(m.month);
+          const monthEnd = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+          const partial = latestPaymentDate < monthEnd;
+          return { label: partial ? `${monthLabel(m.month)} 1–${latestPaymentDate.getDate()}` : monthLabel(m.month), value: Number(m.collected), partial };
+        }));
+
+      // Revenue: only draw a monthly line if every report on file covers a single month
+      const reportPeriods = [...new Set([
+        ...mappedRows.data.map(r => `${r.period_start}|${r.period_end}`),
+        ...festRows.data.map(r => `${r.period_start}|${r.period_end}`),
+      ])].map(k => k.split("|"));
+      const anyMultiMonth = reportPeriods.some(([s, e]) => !s || !e || spanDaysOf(s, e) > 32);
+      if (anyMultiMonth) {
+        const fStarts = festRows.data.map(r => r.period_start).filter(Boolean).sort();
+        const fEnds = festRows.data.map(r => r.period_end).filter(Boolean).sort();
+        const wRange = salesStarts.length ? `${fmtDate(salesStarts[0])} – ${fmtDate(salesEnds[salesEnds.length - 1])}` : "—";
+        const fRange = fStarts.length ? `${fmtDate(fStarts[0])} – ${fmtDate(fEnds[fEnds.length - 1])}` : "—";
+        document.getElementById("pulse-revenue").innerHTML = `<div class="pulse-card"><p class="pulse-label">Total Revenue</p>
+          <p class="pulse-number" style="font-size:19px;">${fmt(wholesale + direct)}</p>
+          <p class="pulse-sub">Wholesale ${wRange} + Direct/Festival ${fRange}. Each of those reports covers more than one month at once, so there's no month-by-month revenue line yet — pull them once per month and it will draw itself.</p></div>`;
+      } else {
+        const revByMonth = {};
+        for (const m of monthlyW.data) revByMonth[m.month] = (revByMonth[m.month] || 0) + Number(m.revenue);
+        for (const m of monthlyF.data) revByMonth[m.month] = (revByMonth[m.month] || 0) + Number(m.revenue);
+        renderPulse("pulse-revenue", "Total Revenue by Month (Wholesale + Direct)",
+          Object.entries(revByMonth).sort().map(([month, value]) => ({ label: monthLabel(month), value })));
+      }
+
+      renderPulse("pulse-ar", "Accounts Receivable (Zoho snapshots)",
+        monthlyAR.data.map(m => ({ label: fmtDate(m.as_of_date), value: Number(m.total_outstanding) })),
+        { kind: "snapshot", sub: "(lower is better)", singleNote: "one snapshot so far; the next one will show whether it's going up or down" });
+
+      // Exact trailing windows for Payments (the only data with a date on every row)
+      window.setPaymentRange = function(days) {
+        document.querySelectorAll(".range-btn[data-days]").forEach(b => b.classList.toggle("active", Number(b.dataset.days) === days));
+        const cutoff = new Date(latestPaymentDate); cutoff.setDate(cutoff.getDate() - days);
+        const prevCutoff = new Date(cutoff); prevCutoff.setDate(prevCutoff.getDate() - days);
+        const winStart = new Date(cutoff); winStart.setDate(winStart.getDate() + 1);
+        const prevStart = new Date(prevCutoff); prevStart.setDate(prevStart.getDate() + 1);
+
+        let current = 0, prior = 0, priorBiggest = null;
+        for (const p of payMapped.data) {
+          const d = parseYmd(p.payment_date), amt = Number(p.amount);
+          if (d > cutoff && d <= latestPaymentDate) current += amt;
+          else if (d > prevCutoff && d <= cutoff) {
+            prior += amt;
+            if (!priorBiggest || amt > priorBiggest.amount) priorBiggest = { amount: amt, name: p.zoho_name };
+          }
+        }
+        const hasPrior = prior > 0;
+        const pctChange = hasPrior ? ((current - prior) / prior) * 100 : null;
+        const lopsided = hasPrior && priorBiggest.amount / prior >= 0.4;
+
+        document.getElementById("range-stats").innerHTML = `
+          <div class="pulse-sub" style="margin-bottom:12px;">${shortDate(winStart)} – ${fmtDate(ymd(latestPaymentDate))} (${days} days)</div>
+          <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:baseline;">
+            <div><div class="pulse-number" style="font-size:24px;">${fmt(current)}</div><div class="pulse-sub">collected</div></div>
+            <div><div class="pulse-number" style="font-size:18px;color:var(--muted);">${fmt(current / days)}</div><div class="pulse-sub">average per day</div></div>
+            ${hasPrior ? `<div><div class="pulse-number" style="font-size:18px;color:var(--dark);">${pctChange >= 0 ? "+" : "−"}${Math.abs(pctChange).toFixed(0)}%</div><div class="pulse-sub">vs. the ${days} days before (${shortDate(prevStart)} – ${shortDate(cutoff)})</div></div>` : ""}
+          </div>
+          ${lopsided ? `<p class="pulse-sub" style="margin-top:10px;">Heads up: one payment — ${fmt(priorBiggest.amount)} from ${esc(priorBiggest.name)} — is ${Math.round(priorBiggest.amount / prior * 100)}% of that earlier window, so the comparison is lopsided.</p>` : ""}
+          <p class="pulse-sub" style="margin-top:10px;">The window ends on your most recent payment on file, not today's date.</p>`;
+      };
+      setPaymentRange(30);
+
+      document.getElementById("status").style.display = "none";
+      document.getElementById("content").style.display = "block";
+    } catch (err) {
+      document.getElementById("status").style.display = "block";
+      document.getElementById("status").innerHTML = "Couldn't load data: " + esc(err.message || "unknown error") + ". Check your Supabase connection.";
+      console.error(err);
+    }
+  }
+
+  console.log("CHECKPOINT 7: reached end of script, calling refreshAuthUI() now");
+  refreshAuthUI();
+</script>
+</body>
+</html>
