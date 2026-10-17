@@ -90,7 +90,7 @@ async function renderTerritories(d) {
   renderTerritoryDetail();
   const coverage = territoryCoverage(d);
   document.getElementById("map-coverage").innerHTML =
-    `<div class="coverage-icon" aria-hidden="true">◎</div><div><strong>${coverage.percent === null ? "No wholesale sales loaded" : `${coverage.percent.toFixed(1)}% of wholesale sales is placed on the map`}</strong><p>${fmt(coverage.mappedSales)} is assigned to listed customers within these boundaries. ${fmt(coverage.otherSales)} is under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are separate.</p></div><button class="btn-sm quiet" data-goto="data">Improve coverage ↗</button>`;
+    `<div class="coverage-icon" aria-hidden="true">◎</div><div><strong>${coverage.percent === null ? "No wholesale sales loaded" : `${coverage.percent.toFixed(1)}% of wholesale sales is placed on the map`}</strong><p>${fmt(coverage.mappedSales)} is assigned to listed customers within these boundaries. ${fmt(coverage.otherSales)} is under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are separate.${provisionalSalesCaption(d) ? `<br><b>${esc(provisionalSalesCaption(d))}</b>` : ""}</p></div><button class="btn-sm quiet" data-goto="data">Improve coverage ↗</button>`;
   if (!territoryMap) {
     territoryMap = L.map("territory-map", {
       zoomControl: true,

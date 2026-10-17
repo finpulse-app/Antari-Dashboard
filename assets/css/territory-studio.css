@@ -1388,3 +1388,25 @@ textarea.field-input {
   overflow: auto;
   scrollbar-width: thin;
 }
+.allocation-notice {
+  background: #f1ead8;
+  border: 1px solid #dfd0aa;
+  border-radius: 7px;
+  padding: 12px 14px;
+  color: #796134;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 14px 0;
+}
+.allocation-notice > b {
+  display: block;
+  font-weight: 600;
+}
+.allocation-notice .btn-sm {
+  font-size: 10px;
+  margin-top: 5px;
+}
+#sales-allocations h2 {
+  font-size: 20px;
+  margin: 7px 0;
+}

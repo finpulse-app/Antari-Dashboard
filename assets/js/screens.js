@@ -20,7 +20,7 @@ function nameFacts(zoho) {
   const owed = D.openBalances.filter((o) => o.zoho_name.toLowerCase() === z);
   return {
     sales: sumOf(rows, (r) => r.sales),
-    invoices: sumOf(rows, (r) => r.invoice_count),
+    invoices: sourceInvoiceTotal(rows),
     payments: sumOf(pay, (p) => p.amount),
     paymentCount: pay.length,
     owed: sumOf(owed, (o) => o.outstanding_balance),
@@ -847,13 +847,16 @@ function customerHistoryHtml(store) {
     invoices = sumOf(rows, (r) => r.invoice_count);
   const zohoNames = [...new Set(rows.map((r) => r.zoho_name))];
   const L = [];
+  L.push(salesEstimateHtml(store));
   L.push(kv("Lifetime sales", fmt(lifetime)));
   L.push(
     kv(
       "Invoices on file",
-      invoices
-        ? `${invoices}${lifetime > 0 ? ` · average ${fmt(lifetime / invoices)}` : ""}`
-        : "0",
+      store.has_estimated_sales
+        ? "Unassigned by location"
+        : invoices
+          ? `${invoices}${lifetime > 0 ? ` · average ${fmt(lifetime / invoices)}` : ""}`
+          : "0",
     ),
   );
   if (rows.length) {
@@ -1080,6 +1083,7 @@ function openVoidModal(id) {
 
 // ---- Data tab: data quality + mapping workspace
 function renderDataTab(d) {
+  renderSalesAllocationPanel(d);
   const S = d.srcMonths,
     L = [],
     un = d.unresolved;
@@ -1173,7 +1177,7 @@ function renderDataTab(d) {
   window.__unresolved = un.map((u) => u.zoho_name);
   document.getElementById("map-unresolved").innerHTML =
     `<div class="pulse-card sec"><p class="pulse-label">Zoho names waiting for your decision</p>
-      <div class="pulse-sub" style="margin-bottom:6px;">Nothing is matched automatically. Until you decide, a name stays in Other.</div>
+      <div class="pulse-sub" style="margin-bottom:6px;">Names without a confirmed location remain under Other, except explicitly labeled provisional sales splits.</div>
       ${
         un.length
           ? un
@@ -1201,6 +1205,16 @@ function renderDataTab(d) {
       ${reviewed.map((m, i) => `<tr><td>${esc(m.zoho_name)}</td><td>${esc(m.mapped_store)}</td><td><button type="button" class="btn-sm quiet" data-rv="${i}">Change</button></td></tr>`).join("")}</tbody></table></details>`;
 }
 async function saveMapping(rows) {
+  if (
+    D?.mappedRows.some(
+      (r) =>
+        r.is_allocated &&
+        rows.some(
+          (m) => m.zoho_name.toLowerCase() === r.zoho_name.toLowerCase(),
+        ),
+    )
+  )
+    return "Disable this name’s provisional sales split above before changing its customer mapping.";
   const { error } = await sb
     .from("name_mapping")
     .upsert(rows, { onConflict: "zoho_name" });
@@ -1597,7 +1611,10 @@ function openModal(store) {
   document.getElementById("modal-revenue").textContent = fmt(
     store.total_revenue,
   );
-  document.getElementById("modal-invoices").textContent = store.invoices;
+  document.getElementById("modal-invoices").textContent = invoiceDescription(
+    store,
+    false,
+  );
   document.getElementById("modal-payment").textContent = fmtDate(
     store.last_payment_date,
   );
@@ -1662,6 +1679,7 @@ function clearWorkspace() {
     .querySelectorAll(".kpi .val")
     .forEach((el) => (el.textContent = "Not available"));
   for (const id of [
+    "sales-allocations",
     "daily-priorities",
     "briefing-basis",
     "channel-composition",
