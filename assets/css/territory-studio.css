@@ -1410,3 +1410,50 @@ textarea.field-input {
   font-size: 20px;
   margin: 7px 0;
 }
+.business-type-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  margin-left: auto;
+}
+.business-type-control select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8f9f2;
+  padding: 8px 10px;
+  color: var(--dark);
+  font-size: 11px;
+  max-width: 190px;
+  min-height: 36px;
+}
+.business-filter-status {
+  margin: 0;
+  padding: 11px 18px;
+  background: #edf1e4;
+  color: #576b49;
+  font-size: 11px;
+  border-bottom: 1px solid #dbe2d0;
+}
+@media (max-width: 750px) {
+  .business-type-control {
+    margin-left: 0;
+    flex: 1;
+  }
+  .business-type-control select {
+    font-size: 16px;
+    max-width: 205px;
+    min-height: 40px;
+  }
+  .business-filter-status {
+    font-size: 11px;
+  }
+  .directory-tools {
+    flex-wrap: wrap;
+  }
+  .directory-tools #customer-business-type {
+    flex: 1;
+    min-width: 150px;
+  }
+}

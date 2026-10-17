@@ -90,18 +90,23 @@ function setStudioView(view) {
   }
   for (const section of document.querySelectorAll(".studio-view"))
     section.hidden = section.id !== "studio-" + view;
-  if (view === "explore") requestAnimationFrame(() => refreshTerritoryMap());
+  if (
+    view === "explore" &&
+    document.getElementById("panel-zips").classList.contains("active")
+  )
+    requestAnimationFrame(() => refreshTerritoryMap());
   if (view === "brief" && D) renderOwnerBrief(D);
 }
 function renderTerritoryStudio(d) {
-  const listed = sumOf(d.storeData, (s) => s.total_revenue),
-    owed = sumOf(d.storeData, (s) => s.outstanding_balance);
+  const filteredCustomers = d.storeData.filter(matchesBusinessType);
+  const listed = sumOf(filteredCustomers, (s) => s.total_revenue),
+    owed = sumOf(filteredCustomers, (s) => s.outstanding_balance);
   document.getElementById("territory-scorecard").innerHTML = [
     ["Listed-customer sales", fmt(listed), "Wholesale reports loaded"],
     [
       "Customers on file",
-      String(d.storeData.length),
-      `${new Set(d.storeData.map((s) => s.zip).filter(Boolean)).size} ZIP territories`,
+      String(filteredCustomers.length),
+      `${new Set(filteredCustomers.map((s) => s.zip).filter(Boolean)).size} ZIP territories`,
     ],
     [
       "Listed-customer balances",
@@ -112,7 +117,9 @@ function renderTerritoryStudio(d) {
       "Prospects to develop",
       String(
         openProspects(d).filter(
-          (p) => !["repeat_buyer", "paused"].includes(p.stage),
+          (p) =>
+            !["repeat_buyer", "paused"].includes(p.stage) &&
+            matchesBusinessType(p),
         ).length,
       ),
       "Recorded by the owners",
@@ -166,7 +173,9 @@ function renderStudioTerritoryDetail() {
       (a, b) => Number(b.total_revenue) - Number(a.total_revenue),
     ),
     c = concentration(g);
-  const prospects = openProspects(d).filter((p) => p.zip === g.zip),
+  const prospects = openProspects(d).filter(
+      (p) => p.zip === g.zip && matchesBusinessType(p),
+    ),
     isGeo = Object.hasOwn(neighborhoodContext.areas, g.zip);
   const metric = document.getElementById("map-metric").value;
   box.innerHTML = `<div class="detail-topline"><span class="eyebrow">TERRITORY PROFILE</span><span class="detail-badge">${isGeo ? "NYC ZIP area" : "Outside map coverage"}</span></div><h2>${esc(g.zip)}</h2><p class="nearby-areas">${esc((neighborhoodContext.areas[g.zip] || []).slice(0, 3).join(" / ") || "Neighborhood context unavailable")}</p><div class="detail-stats"><div><small>Sales</small><b>${fmt(g.revenue)}</b></div><div><small>Outstanding</small><b>${fmt(g.outstanding)}</b></div><div><small>Customers / buyers</small><b>${g.customers.length} / ${c.buyers}</b></div><div><small>Prospects</small><b>${prospects.length}</b></div></div>

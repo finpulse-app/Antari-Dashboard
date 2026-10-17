@@ -10,7 +10,7 @@ const territoryLabelMarkers = new Map();
 const contextLabelMarkers = [];
 function territoryStats(d) {
   const groups = new Map();
-  for (const customer of d.storeData) {
+  for (const customer of d.storeData.filter(matchesBusinessType)) {
     const zip = customer.zip || "Unassigned";
     if (!groups.has(zip))
       groups.set(zip, {
@@ -28,7 +28,11 @@ function territoryStats(d) {
     group.invoices += Number(customer.invoices);
   }
   for (const p of (d.prospects || []).filter(
-    (p) => !p.archived && p.stage !== "paused" && p.stage !== "repeat_buyer",
+    (p) =>
+      !p.archived &&
+      p.stage !== "paused" &&
+      p.stage !== "repeat_buyer" &&
+      matchesBusinessType(p),
   )) {
     if (!groups.has(p.zip))
       groups.set(p.zip, {
@@ -90,7 +94,7 @@ async function renderTerritories(d) {
   renderTerritoryDetail();
   const coverage = territoryCoverage(d);
   document.getElementById("map-coverage").innerHTML =
-    `<div class="coverage-icon" aria-hidden="true">◎</div><div><strong>${coverage.percent === null ? "No wholesale sales loaded" : `${coverage.percent.toFixed(1)}% of wholesale sales is placed on the map`}</strong><p>${fmt(coverage.mappedSales)} is assigned to listed customers within these boundaries. ${fmt(coverage.otherSales)} is under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are separate.${provisionalSalesCaption(d) ? `<br><b>${esc(provisionalSalesCaption(d))}</b>` : ""}</p></div><button class="btn-sm quiet" data-goto="data">Improve coverage ↗</button>`;
+    `<div class="coverage-icon" aria-hidden="true">◎</div><div><strong>${coverage.percent === null ? "No wholesale sales loaded" : `${coverage.percent.toFixed(1)}% of wholesale sales is placed on the map across all business types`}</strong><p>${fmt(coverage.mappedSales)} is assigned to listed customers within these boundaries. ${fmt(coverage.otherSales)} is under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are separate.${provisionalSalesCaption(d) ? `<br><b>${esc(provisionalSalesCaption(d))}</b>` : ""}</p></div><button class="btn-sm quiet" data-goto="data">Improve coverage ↗</button>`;
   if (!territoryMap) {
     territoryMap = L.map("territory-map", {
       zoomControl: true,

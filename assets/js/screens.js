@@ -1677,6 +1677,7 @@ function clearWorkspace() {
   hideToast();
   document.body.classList.remove("authenticated");
   if (typeof clearTerritories === "function") clearTerritories();
+  if (typeof clearBusinessTypeFilter === "function") clearBusinessTypeFilter();
   if (typeof clearTerritoryStudio === "function") clearTerritoryStudio();
   document
     .querySelectorAll(".kpi .val")

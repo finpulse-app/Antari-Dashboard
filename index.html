@@ -26,6 +26,7 @@
     <script src="vendor/leaflet/leaflet.js" defer></script>
     <script src="assets/js/core.js" defer></script>
     <script src="assets/js/analytics.js" defer></script>
+    <script src="assets/js/business-types.js" defer></script>
     <script src="assets/js/allocations.js" defer></script>
     <script src="assets/js/screens.js" defer></script>
     <script src="assets/js/parsers.js" defer></script>
@@ -312,10 +313,23 @@
                   <option value="customers">Customer network</option>
                   <option value="prospects">Opportunities</option>
                 </select>
+                <label class="business-type-control" for="map-business-type"
+                  >Business type<select
+                    id="map-business-type"
+                    data-business-type-filter
+                  >
+                    <option value="">All business types</option>
+                  </select></label
+                >
                 <button class="btn-sm quiet" id="map-attention">
                   What needs attention? <span id="attention-count"></span>
                 </button>
               </div>
+              <p
+                id="business-filter-status"
+                class="business-filter-status"
+                hidden
+              ></p>
               <div class="territory-layout">
                 <div class="territory-map-card">
                   <div
@@ -597,7 +611,11 @@
                 id="customer-filter"
                 type="search"
                 placeholder="Find a customer or ZIP…"
-              /><label class="sr-only" for="customer-sort">Sort customers</label
+              /><label class="sr-only" for="customer-business-type"
+                >Business type</label
+              ><select id="customer-business-type" data-business-type-filter>
+                <option value="">All business types</option></select
+              ><label class="sr-only" for="customer-sort">Sort customers</label
               ><select id="customer-sort">
                 <option value="revenue">Revenue: high to low</option>
                 <option value="outstanding">Outstanding: high to low</option>
