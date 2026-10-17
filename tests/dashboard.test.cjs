@@ -22,10 +22,7 @@ function makeApp({ preview = true, transform } = {}) {
   const ctx = dom.getInternalVMContext();
   vm.runInContext(readFileSync(root + "tests/preview-data.js", "utf8"), ctx);
   // Map geometry is browser-tested; DOM tests cover data aggregation without a canvas.
-  vm.runInContext(
-    "var renderTerritories=function(){}; var refreshTerritoryMap=function(){};",
-    ctx,
-  );
+
   if (transform) transform(ctx);
   if (!preview)
     vm.runInContext(
@@ -40,12 +37,21 @@ function makeApp({ preview = true, transform } = {}) {
     "imports",
     "app",
     "neighborhoods",
+    "territories",
+    "note-capture",
     "fieldwork",
+    "territory-studio",
     "workspace",
-  ])
+  ]) {
     vm.runInContext(readFileSync(root + `assets/js/${name}.js`, "utf8"), ctx, {
       filename: name + ".js",
     });
+    if (name === "territories")
+      vm.runInContext(
+        "renderTerritories=function(){}; refreshTerritoryMap=function(){};",
+        ctx,
+      );
+  }
   return { dom, ctx, run: (code) => vm.runInContext(code, ctx) };
 }
 async function settled(app) {
@@ -74,7 +80,6 @@ test("full dashboard loads all major screens, directory and report dialogs", asy
       "products",
       "receivables",
       "trends",
-      "routes",
       "zips",
       "data",
       "upload",
@@ -485,6 +490,318 @@ test("phone search toggles accessibly and navigation carries the active view", a
     assert.equal(
       app.dom.window.document.querySelectorAll(".mobile-actions button").length,
       5,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("expansion scenarios calculate contribution, sensitivity, and cost coverage without touching financial totals", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const before = app.run("D.wholesale+D.direct");
+    const r = app.run(
+      "calculateExpansion({customers:5,order_value:100,orders_per_month:2,margin_pct:30,monthly_cost:50})",
+    );
+    assert.equal(r.revenue, 1000);
+    assert.equal(r.grossProfit, 300);
+    assert.equal(r.contribution, 250);
+    assert.equal(r.breakEvenCustomers, 1);
+    assert.equal(r.cases[0].contribution, 190);
+    assert.equal(r.cases[2].contribution, 310);
+    assert.equal(
+      app.run(
+        'calculateExpansion({customers:"",order_value:100,orders_per_month:2,margin_pct:30,monthly_cost:50})',
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        "calculateExpansion({customers:2.5,order_value:100,orders_per_month:2,margin_pct:30,monthly_cost:50})",
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        "calculateExpansion({customers:5,order_value:100,orders_per_month:2,margin_pct:0,monthly_cost:50}).breakEvenCustomers",
+      ),
+      null,
+    );
+    assert.equal(app.run("D.wholesale+D.direct"), before);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("territory workspace redirects old routes and keeps its four views navigable", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run('navigateTo("routes")');
+    assert.equal(app.dom.window.document.body.dataset.view, "zips");
+    assert.equal(
+      app.dom.window.document.querySelectorAll('.tab[data-tab="routes"]')
+        .length,
+      0,
+    );
+    for (const view of ["pipeline", "planner", "brief", "explore"]) {
+      app.dom.window.document
+        .querySelector(`[data-studio-view="${view}"]`)
+        .click();
+      assert.equal(
+        app.dom.window.document.querySelector(`#studio-${view}`).hidden,
+        false,
+      );
+      assert.equal(
+        app.dom.window.document.querySelectorAll(".studio-view:not([hidden])")
+          .length,
+        1,
+      );
+    }
+    assert.match(
+      app.dom.window.document.querySelector("#territory-owner-brief")
+        .textContent,
+      /Other buyers|Map coverage is incomplete/,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("pipeline stages are owner records and hostile text stays inert", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      'D.prospects=[{id:"a",business_name:"<img src=x onerror=alert(1)>",zip:"11235",stage:"sampled",notes:"<script>boom</script>",next_step:"Call the buyer",sampling_cost:25,archived:false,revision:1}];renderProspectBoard(D)',
+    );
+    assert.equal(
+      app.dom.window.document.querySelectorAll(
+        "#prospect-board img,#prospect-board script",
+      ).length,
+      0,
+    );
+    assert.match(
+      app.dom.window.document.querySelector("#pipeline-summary").textContent,
+      /\$25.00/,
+    );
+    assert.equal(
+      app.dom.window.document.querySelector('[data-prospect-stage="a"]').value,
+      "sampled",
+    );
+    app.run("openProspectForm(D.prospects[0])");
+    assert.equal(
+      app.dom.window.document.querySelector('[name="business_name"]').value,
+      "<img src=x onerror=alert(1)>",
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("stale edits fail visibly instead of overwriting another owner's changes", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      "sb.from=()=>({update:()=>({eq(){return this},select:async()=>({data:[],error:null})})})",
+    );
+    await assert.rejects(
+      () =>
+        app.run(
+          'persistShared("territory_prospects",{stage:"sampled"},{id:"a",revision:1})',
+        ),
+      /changed in another session/,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("attention signals distinguish owner commitments from inferred order activity", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const signals = app.run(
+      'territorySignals({...D,payLog:[],balances:[],unresolved:[],followups:[{id:"f",store_name:D.storeData[0].store_name,title:"Discuss samples",due_on:businessDay(),completed:false}],prospects:[]})',
+    );
+    assert.equal(signals.length, 1);
+    assert.equal(signals[0].type, "followup");
+    assert.match(signals[0].evidence, /set for/);
+    assert.doesNotMatch(signals[0].evidence, /last order|overdue invoice/i);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("visit wording captures units, juice, first purchase discount, and price", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const r = app.run(
+      'interpretVisitNote("Sold 100 units of juice to Cedar Market, which includes a 10% first time discount at $2 each",D.stores)',
+    );
+    assert.equal(r.kind, "sale_draft");
+    assert.equal(r.quantity, 100);
+    assert.equal(r.product, "juice");
+    assert.equal(r.discount_pct, 10);
+    assert.equal(r.discount_reason, "First purchase");
+    assert.equal(r.unit_price, 2);
+    assert.equal(r.customer, "Cedar Market");
+    const money = app.run(
+      "saleDraftAmounts({quantity:100,unit_price:2,discount_pct:10})",
+    );
+    assert.equal(money.gross, 200);
+    assert.equal(money.discount, 20);
+    assert.equal(money.afterDiscount, 180);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("unknown prices or discounts stay unknown, and plans, negation, multiple products and total prices are not posted as sales", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice with a 10% discount").unit_price',
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice at $2 each").discount_pct',
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        "saleDraftAmounts({quantity:100,unit_price:null,discount_pct:10})",
+      ),
+      null,
+    );
+    for (const text of [
+      "Will sell 100 bottles of juice with 10% discount",
+      "Did not sell 100 bottles of juice",
+      "Sold 100 bottles of juice and 20 cases of tea",
+    ]) {
+      app.ctx.wording = text;
+      assert.equal(app.run("interpretVisitNote(wording).kind"), "note");
+    }
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice for $100 total").unit_price',
+      ),
+      null,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("typing a sale note immediately builds structured details, retains missing prices, and refuses a customer mismatch", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run('openVisitNotes("Cedar Market")');
+    const note = app.dom.window.document.querySelector("#visit-note");
+    note.value = "Sold 100 bottles of juice with a 10% first time discount";
+    note.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
+    const capture = app.run(
+      'document.getElementById("note-sale-fields").getCapture()',
+    );
+    assert.equal(capture.activity_kind, "sale_draft");
+    assert.equal(capture.quantity, 100);
+    assert.equal(capture.discount_pct, 10);
+    assert.equal(capture.unit_price, null);
+    assert.match(
+      app.dom.window.document.querySelector("#note-understanding").textContent,
+      /Unit price missing/,
+    );
+    note.value =
+      "Sold 100 bottles of juice to Ararat Bakery with a 10% discount";
+    note.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
+    assert.throws(
+      () => app.run('document.getElementById("note-sale-fields").getCapture()'),
+      /differs from the selected customer/,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("ZIP concentration uses listed buyers only and prospects never add financial sales", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const g = app.run(
+      'territoryStats({storeData:[{store_name:"A",zip:"11235",total_revenue:300,outstanding_balance:20,invoices:2},{store_name:"B",zip:"11235",total_revenue:100,outstanding_balance:0,invoices:1},{store_name:"C",zip:"11235",total_revenue:0,outstanding_balance:0,invoices:0}],prospects:[{zip:"11235",stage:"sampled",archived:false},{zip:"11235",stage:"paused",archived:false}]}).get("11235")',
+    );
+    assert.equal(g.revenue, 400);
+    assert.equal(g.prospects, 1);
+    app.ctx.testGroup = g;
+    const c = app.run("concentration(testGroup)");
+    assert.equal(c.buyers, 2);
+    assert.equal(c.share, 75);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("sale drafts never affect a report-based owner brief and signout clears scenario inputs", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const before = app.run("D.wholesale+D.direct");
+    app.run(
+      'D.visitNotes=[{activity_kind:"sale_draft",quantity:100,product:"juice",unit_price:2,discount_pct:10}];renderOwnerBrief(D)',
+    );
+    assert.equal(app.run("D.wholesale+D.direct"), before);
+    assert.match(
+      app.dom.window.document.querySelector("#territory-owner-brief")
+        .textContent,
+      /visit sale drafts are excluded/,
+    );
+    app.dom.window.document.querySelector(
+      '#expansion-form [name="title"]',
+    ).value = "Private plan";
+    app.run("clearWorkspace()");
+    assert.equal(
+      app.dom.window.document.querySelector('#expansion-form [name="title"]')
+        .value,
+      "",
+    );
+    assert.equal(
+      app.dom.window.document.querySelector("#territory-owner-brief")
+        .textContent,
+      "",
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("conditional discounts, refunds, and imprecise unit prices remain unasserted", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice. Discussed a 10% discount for next order.").discount_pct',
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice at $2.999 each").unit_price',
+      ),
+      null,
+    );
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 bottles of juice but returned the order").kind',
+      ),
+      "note",
+    );
+    assert.equal(
+      app.run(
+        'interpretVisitNote("Sold 100 cases of juice at $1,000 each with a 10% discount").unit_price',
+      ),
+      1000,
     );
   } finally {
     app.dom.window.close();

@@ -1657,6 +1657,7 @@ function clearWorkspace() {
   hideToast();
   document.body.classList.remove("authenticated");
   if (typeof clearTerritories === "function") clearTerritories();
+  if (typeof clearTerritoryStudio === "function") clearTerritoryStudio();
   document
     .querySelectorAll(".kpi .val")
     .forEach((el) => (el.textContent = "Not available"));
@@ -1753,13 +1754,4 @@ async function signOut() {
 document.getElementById("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
   signIn();
-});
-sb.auth.onAuthStateChange((event, session) => {
-  if (
-    ["INITIAL_SESSION", "SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(
-      event,
-    )
-  ) {
-    setTimeout(() => applySession(session).catch(showLoadError), 0);
-  }
 });

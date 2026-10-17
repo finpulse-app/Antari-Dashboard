@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
     <link rel="stylesheet" href="assets/css/components.css" />
     <link rel="stylesheet" href="assets/css/workspace.css" />
+    <link rel="stylesheet" href="assets/css/territory-studio.css" />
     <script src="vendor/supabase.js" defer></script>
     <script src="vendor/leaflet/leaflet.js" defer></script>
     <script src="assets/js/core.js" defer></script>
@@ -31,7 +32,9 @@
     <script src="assets/js/app.js" defer></script>
     <script src="assets/js/neighborhoods.js" defer></script>
     <script src="assets/js/territories.js" defer></script>
+    <script src="assets/js/note-capture.js" defer></script>
     <script src="assets/js/fieldwork.js" defer></script>
+    <script src="assets/js/territory-studio.js" defer></script>
     <script src="assets/js/workspace.js" defer></script>
   </head>
   <body>
@@ -48,6 +51,8 @@
       <nav aria-label="Main navigation">
         <button class="tab active" data-tab="overview" aria-current="page">
           <span aria-hidden="true">▦</span>Overview</button
+        ><button class="tab" data-tab="zips" aria-current="false">
+          <span aria-hidden="true">◎</span>Territory insights</button
         ><button class="tab" data-tab="stores" aria-current="false">
           <span aria-hidden="true">◉</span>Customers</button
         ><button class="tab" data-tab="products" aria-current="false">
@@ -56,10 +61,6 @@
           <span aria-hidden="true">↙</span>Receivables</button
         ><button class="tab" data-tab="trends" aria-current="false">
           <span aria-hidden="true">⌁</span>Performance</button
-        ><button class="tab" data-tab="routes" aria-current="false">
-          <span aria-hidden="true">⇄</span>Delivery routes</button
-        ><button class="tab" data-tab="zips" aria-current="false">
-          <span aria-hidden="true">◎</span>Territories</button
         ><button class="tab" data-tab="data" aria-current="false">
           <span aria-hidden="true">≡</span>Data quality</button
         ><button class="tab" data-tab="upload" aria-current="false">
@@ -263,58 +264,305 @@
         </div>
 
         <div class="panel" id="panel-zips">
-          <div class="territory-toolbar">
-            <div>
-              <span class="eyebrow">NEW YORK · DISTRIBUTION FOOTPRINT</span>
-              <h2>Where you do business</h2>
-            </div>
-            <div>
-              <label for="map-metric">Shade territories by</label
-              ><select id="map-metric">
-                <option value="revenue">Revenue</option>
-                <option value="outstanding">Outstanding balance</option>
-                <option value="customers">Customer count</option>
-              </select>
-            </div>
-          </div>
-          <div id="map-coverage" class="map-coverage" aria-live="polite"></div>
-          <div class="territory-layout">
-            <div class="territory-map-card">
-              <div
-                id="territory-map"
-                role="region"
-                aria-label="Interactive territory map"
-              ></div>
-              <div class="map-caption">
-                <span><i></i>Lower <b>→</b> Higher</span
-                ><button class="btn-sm quiet" id="map-fit">
-                  Fit our territories ↗
+          <nav class="studio-tabs" aria-label="Territory workspace">
+            <button
+              class="active"
+              data-studio-view="explore"
+              aria-pressed="true"
+            >
+              Explore the map
+            </button>
+            <button data-studio-view="pipeline" aria-pressed="false">
+              Grow your network <span id="pipeline-count">0</span>
+            </button>
+            <button data-studio-view="planner" aria-pressed="false">
+              Plan an expansion
+            </button>
+            <button data-studio-view="brief" aria-pressed="false">
+              Owner brief
+            </button>
+          </nav>
+          <section id="studio-explore" class="studio-view">
+            <div id="territory-scorecard" class="studio-scorecard"></div>
+            <div class="map-workbench">
+              <div class="map-controls">
+                <div class="map-lenses" role="group" aria-label="Map insight">
+                  <button
+                    class="active"
+                    data-map-lens="revenue"
+                    aria-pressed="true"
+                  >
+                    Sales
+                  </button>
+                  <button data-map-lens="outstanding" aria-pressed="false">
+                    Collections
+                  </button>
+                  <button data-map-lens="customers" aria-pressed="false">
+                    Customer network
+                  </button>
+                  <button data-map-lens="prospects" aria-pressed="false">
+                    Opportunities
+                  </button>
+                </div>
+                <label class="sr-only" for="map-metric">Map insight</label>
+                <select id="map-metric" hidden>
+                  <option value="revenue">Sales</option>
+                  <option value="outstanding">Collections</option>
+                  <option value="customers">Customer network</option>
+                  <option value="prospects">Opportunities</option>
+                </select>
+                <button class="btn-sm quiet" id="map-attention">
+                  What needs attention? <span id="attention-count"></span>
                 </button>
               </div>
+              <div class="territory-layout">
+                <div class="territory-map-card">
+                  <div
+                    id="territory-map"
+                    role="region"
+                    aria-label="Interactive territory map"
+                  ></div>
+                  <div class="map-caption">
+                    <span
+                      ><i></i
+                      ><span id="map-legend-text"
+                        >Lower → Higher sales</span
+                      ></span
+                    ><button class="btn-sm quiet" id="map-fit">
+                      Fit our territories ↗
+                    </button>
+                  </div>
+                </div>
+                <aside
+                  id="territory-details"
+                  class="territory-details"
+                  aria-label="Territory and customer details"
+                  aria-live="polite"
+                ></aside>
+              </div>
+              <div class="territory-footer">
+                <span>Choose any area or search a ZIP</span
+                ><label class="sr-only" for="territory-search"
+                  >Find a ZIP or neighborhood</label
+                ><input
+                  id="territory-search"
+                  type="search"
+                  placeholder="ZIP or neighborhood"
+                />
+              </div>
+              <div
+                id="territory-zip-list"
+                class="zip-pills"
+                aria-label="Choose a ZIP territory"
+              ></div>
             </div>
             <div
-              id="territory-details"
-              class="territory-details"
+              id="map-coverage"
+              class="map-coverage"
               aria-live="polite"
             ></div>
-          </div>
-          <div
-            id="territory-zip-list"
-            class="zip-pills"
-            aria-label="Choose a ZIP territory"
-          ></div>
-          <p class="map-source">
-            Areas are Census ZIP Code Tabulation Areas, which approximate postal
-            ZIPs.
-            <a
-              href="https://data.cityofnewyork.us/City-Government/ZIP-Code-Tabulation-Areas/35j5-n34v"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Boundary source: NYC Open Data</a
-            >. All data below uses loaded report coverage. Unmapped ZIPs remain
-            available in the list.
-          </p>
-          <div id="zips-grid-view">
+            <div class="studio-bottom-grid">
+              <section class="studio-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="eyebrow">FOLLOW THROUGH</span>
+                    <h2>Your next actions</h2>
+                  </div>
+                  <button class="btn-sm quiet" data-studio-action="followup">
+                    Add an action ↗
+                  </button>
+                </div>
+                <div id="territory-actions"></div>
+              </section>
+              <section class="studio-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="eyebrow">TRY, LEARN, REPEAT</span>
+                    <h2>Territory projects</h2>
+                  </div>
+                  <button class="btn-sm quiet" data-studio-action="initiative">
+                    New project ↗
+                  </button>
+                </div>
+                <div id="territory-initiatives"></div>
+              </section>
+            </div>
+            <p class="map-source">
+              Figures use loaded wholesale reports. ZIP areas approximate postal
+              boundaries; neighborhood names are nearby context. Store positions
+              are not plotted as exact addresses.
+              <a
+                href="https://data.cityofnewyork.us/City-Government/ZIP-Code-Tabulation-Areas/35j5-n34v"
+                target="_blank"
+                rel="noopener noreferrer"
+                >NYC boundary source</a
+              >
+              ·
+              <a
+                href="https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Neighborhood source</a
+              >
+            </p>
+          </section>
+          <section id="studio-pipeline" class="studio-view" hidden>
+            <div class="studio-section-heading">
+              <div>
+                <span class="eyebrow">FROM FIRST HELLO TO REPEAT BUYER</span>
+                <h2>Build your next customer relationships.</h2>
+                <p>
+                  Keep samples, conversations, and next steps together. Both
+                  owners see the same records.
+                </p>
+              </div>
+              <button class="btn-solid" data-studio-action="prospect">
+                Add a prospect ↗
+              </button>
+            </div>
+            <div class="pipeline-tools">
+              <label class="sr-only" for="pipeline-search"
+                >Search prospects</label
+              ><input
+                id="pipeline-search"
+                type="search"
+                placeholder="Find a business or ZIP"
+              /><label
+                ><input type="checkbox" id="pipeline-archived" /> Include
+                archived</label
+              >
+            </div>
+            <div id="pipeline-summary" class="pipeline-summary"></div>
+            <div id="prospect-board" class="prospect-board"></div>
+            <p class="studio-caption">
+              Stages and sample spending are recorded by the owners. Moving a
+              card does not create a customer, an invoice, or reported revenue.
+            </p>
+          </section>
+          <section id="studio-planner" class="studio-view" hidden>
+            <div class="studio-section-heading">
+              <div>
+                <span class="eyebrow">EXPLORE THE POSSIBILITIES</span>
+                <h2>What could your next territory contribute?</h2>
+                <p>
+                  Set your assumptions. See the economics change as you adjust
+                  them.
+                </p>
+              </div>
+              <span class="assumption-badge">Planning only</span>
+            </div>
+            <div class="planner-layout">
+              <form id="expansion-form" class="studio-card">
+                <div class="form-grid">
+                  <label
+                    >Plan name<input
+                      name="title"
+                      maxlength="160"
+                      required
+                      placeholder="Name your expansion" /></label
+                  ><label
+                    >ZIP, optional<input
+                      name="zip"
+                      inputmode="numeric"
+                      pattern="[0-9]{5}"
+                      maxlength="5"
+                      placeholder="11235" /></label
+                  ><label
+                    >New customers<input
+                      name="customers"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      step="1"
+                      required
+                      placeholder="Number of stores" /></label
+                  ><label
+                    >Average order value ($)<input
+                      name="order_value"
+                      type="number"
+                      min="0.01"
+                      max="999999999"
+                      step="0.01"
+                      required
+                      placeholder="Per store, per order" /></label
+                  ><label
+                    >Orders per store / month<input
+                      name="orders_per_month"
+                      type="number"
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      required
+                      placeholder="Expected frequency" /></label
+                  ><label
+                    >Gross margin (%)<input
+                      name="margin_pct"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      required
+                      placeholder="After product costs" /></label
+                  ><label class="full-field"
+                    >Extra monthly operating costs ($)<input
+                      name="monthly_cost"
+                      type="number"
+                      min="0"
+                      max="999999999"
+                      step="0.01"
+                      required
+                      placeholder="Delivery, samples, and other incremental costs"
+                  /></label>
+                </div>
+                <p class="studio-caption">
+                  All inputs are your assumptions. Contribution means sales
+                  after assumed product costs and the extra monthly costs
+                  entered here. General overhead, taxes, financing, and working
+                  capital are excluded.
+                </p>
+                <div id="scenario-error" role="alert" class="pay-error"></div>
+                <div class="modal-actions">
+                  <button type="button" class="btn-ghost" id="scenario-reset">
+                    Clear</button
+                  ><button type="submit" class="btn-solid" id="scenario-save">
+                    Save shared plan
+                  </button>
+                </div>
+              </form>
+              <div
+                id="expansion-results"
+                class="expansion-results"
+                aria-live="polite"
+              ></div>
+            </div>
+            <section class="studio-card saved-plans">
+              <div class="card-heading">
+                <h2>Your saved plans</h2>
+                <label class="archive-plans-label"
+                  ><input id="scenario-show-archived" type="checkbox" /> Include
+                  archived</label
+                >
+              </div>
+              <div id="saved-scenarios"></div>
+            </section>
+          </section>
+          <section id="studio-brief" class="studio-view" hidden>
+            <div class="studio-section-heading">
+              <div>
+                <span class="eyebrow">A CLEAR BUSINESS PICTURE</span>
+                <h2>Your owner brief.</h2>
+                <p>
+                  A printable view with source dates and the limits of the
+                  available data.
+                </p>
+              </div>
+              <button class="btn-solid" id="print-owner-brief">
+                Print / Save PDF ↗
+              </button>
+            </div>
+            <article id="territory-owner-brief" class="owner-brief"></article>
+          </section>
+          <div id="zips-grid-view" hidden>
             <h2 class="section-label">
               Tap a zip code to see which customers (stores and restaurants) are
               in it, ranked by revenue.
@@ -347,7 +595,7 @@
               ><input
                 id="customer-filter"
                 type="search"
-                placeholder="Find a customer, route, or ZIP…"
+                placeholder="Find a customer or ZIP…"
               /><label class="sr-only" for="customer-sort">Sort customers</label
               ><select id="customer-sort">
                 <option value="revenue">Revenue: high to low</option>

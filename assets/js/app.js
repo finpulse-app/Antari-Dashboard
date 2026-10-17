@@ -137,10 +137,16 @@ async function loadDashboard(epoch) {
   try {
     // Each query is named, and results are read back BY NAME: so a reordering typo can't scramble the data again.
     const queries = {
+      prospects: () => sb.from("territory_prospects").select("*"),
+      followups: () => sb.from("customer_followups").select("*"),
+      scenarios: () => sb.from("territory_scenarios").select("*"),
+      initiatives: () => sb.from("territory_initiatives").select("*"),
       visitNotes: () =>
         sb
           .from("customer_visit_notes")
-          .select("id,store_name,note,created_at,recorded_by_email"),
+          .select(
+            "id,store_name,note,created_at,recorded_by_email,activity_kind,product,quantity,quantity_unit,discount_pct,discount_reason,unit_price,sale_on",
+          ),
       storeRank: () =>
         sb.from("v_store_ranking").select("*").order("revenue_rank"),
       prodRank: () =>
@@ -151,7 +157,11 @@ async function loadDashboard(epoch) {
       channel: () => sb.from("v_channel_summary").select("*"),
       other: () => sb.from("v_other_bucket").select("*"),
       stores: () =>
-        sb.from("stores").select("store_name,zip,delivery_route,category"),
+        sb
+          .from("stores")
+          .select(
+            "store_name,zip,delivery_route,category,contact_name,phone_email,notes",
+          ),
       monthlyW: () => sb.from("v_monthly_wholesale").select("*"),
       monthlyF: () => sb.from("v_monthly_festival").select("*"),
       monthlyAR: () => sb.from("v_monthly_ar").select("*"),
@@ -200,6 +210,10 @@ async function loadDashboard(epoch) {
           .order("imported_at", { ascending: false }),
     };
     const orderKeys = {
+      prospects: ["id"],
+      followups: ["id"],
+      scenarios: ["id"],
+      initiatives: ["id"],
       visitNotes: ["id"],
       storeRank: ["store_name"],
       prodRank: ["item_name"],
@@ -986,6 +1000,10 @@ async function loadDashboard(epoch) {
 
     // ---- v14: everything the new screens need, then draw them
     D = {
+      prospects: R.prospects.data,
+      followups: R.followups.data,
+      scenarios: R.scenarios.data,
+      initiatives: R.initiatives.data,
       visitNotes: R.visitNotes.data,
       storeData,
       stores: stores.data,

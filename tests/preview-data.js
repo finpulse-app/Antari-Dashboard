@@ -93,14 +93,12 @@ function createPreviewData() {
       payment_mode: "Bank Transfer",
     })),
   );
-  const balances = stores
-    .slice(0, 3)
-    .map((s, i) => ({
-      id: i + 1,
-      as_of_date: "2026-09-30",
-      zoho_name: s.store_name,
-      outstanding_balance: [1820, 1240, 960][i],
-    }));
+  const balances = stores.slice(0, 3).map((s, i) => ({
+    id: i + 1,
+    as_of_date: "2026-09-30",
+    zoho_name: s.store_name,
+    outstanding_balance: [1820, 1240, 960][i],
+  }));
   const open = balances.map((b) => ({
     balance_id: b.id,
     as_of_date: b.as_of_date,
@@ -283,9 +281,13 @@ function createPreviewClient(data = createPreviewData()) {
     },
     from(name) {
       let start = 0,
-        end = Infinity;
+        end = Infinity,
+        write = false;
       const query = {
         select() {
+          return this;
+        },
+        eq() {
           return this;
         },
         order() {
@@ -302,19 +304,23 @@ function createPreviewClient(data = createPreviewData()) {
         },
         then(resolve, reject) {
           return Promise.resolve({
-            data: (data[name] || []).slice(start, end + 1),
-            error: null,
+            data: write ? null : (data[name] || []).slice(start, end + 1),
+            error: write
+              ? { message: "Writes are disabled in design preview." }
+              : null,
           }).then(resolve, reject);
         },
-        async insert() {
-          return {
-            error: { message: "Writes are disabled in design preview." },
-          };
+        insert() {
+          write = true;
+          return this;
         },
-        async upsert() {
-          return {
-            error: { message: "Writes are disabled in design preview." },
-          };
+        update() {
+          write = true;
+          return this;
+        },
+        upsert() {
+          write = true;
+          return this;
         },
       };
       return query;
