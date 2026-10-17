@@ -137,6 +137,7 @@ async function loadDashboard(epoch) {
   try {
     // Each query is named, and results are read back BY NAME: so a reordering typo can't scramble the data again.
     const queries = {
+      saleAllocations: () => sb.from("sales_customer_allocations").select("*"),
       prospects: () => sb.from("territory_prospects").select("*"),
       followups: () => sb.from("customer_followups").select("*"),
       scenarios: () => sb.from("territory_scenarios").select("*"),
@@ -178,7 +179,7 @@ async function loadDashboard(epoch) {
         sb
           .from("v_sales_customer_mapped")
           .select(
-            "id,zoho_name,mapped_store,sales,invoice_count,period_start,period_end,import_batch_id",
+            "id,zoho_name,mapped_store,sales,invoice_count,period_start,period_end,import_batch_id,is_allocated,allocation_note,source_invoice_count",
           ),
       openBal: () => sb.from("v_open_balances").select("*"),
       itemRows: () =>
@@ -210,6 +211,7 @@ async function loadDashboard(epoch) {
           .order("imported_at", { ascending: false }),
     };
     const orderKeys = {
+      saleAllocations: ["source_sale_id", "store_name"],
       prospects: ["id"],
       followups: ["id"],
       scenarios: ["id"],
@@ -229,7 +231,7 @@ async function loadDashboard(epoch) {
       demo: ["zip"],
       ancestry: ["id"],
       payMapped: ["id"],
-      mappedRows: ["id"],
+      mappedRows: ["id", "mapped_store"],
       openBal: ["balance_id"],
       itemRows: ["id"],
       festRows: ["id"],
@@ -335,6 +337,7 @@ async function loadDashboard(epoch) {
         });
       c.revenue += Number(r.sales);
       c.invoices += Number(r.invoice_count);
+      c.invoice_count_unknown ||= Boolean(r.is_allocated);
     }
     const allBuyers = Object.values(custMap);
     const customers = allBuyers.filter((c) => c.listed); // stores + restaurants that bought in this period
@@ -355,7 +358,7 @@ async function loadDashboard(epoch) {
         ) + 1
       : null;
     const invoiceText = (c) =>
-      `${c.category ? esc(c.category) + " · " : ""}${c.invoices} invoice${c.invoices === 1 ? "" : "s"}${salesSpanDays ? ` in ${salesSpanDays} days` : ""}`;
+      `${c.category ? esc(c.category) + " · " : ""}${invoiceDescription(c)}${salesSpanDays ? ` in ${salesSpanDays} days` : ""}`;
     const unlistedTag = (c) =>
       c.listed ? "" : `<span class="tag-unlisted">other buyer</span>`;
     const ovRow = (c, sub, valueHtml) =>
@@ -491,7 +494,7 @@ async function loadDashboard(epoch) {
           <div class="rank">${zero ? "" : "#" + s.revenue_rank}</div>
           <p class="name">${esc(s.store_name)}</p>
           <div class="revenue">${fmtCompact(s.total_revenue)}</div>
-          <div class="sub">${s.category ? esc(s.category) + " · " : ""}${s.invoices} invoice${s.invoices === 1 ? "" : "s"}</div>
+          <div class="sub">${s.category ? esc(s.category) + " · " : ""}${invoiceDescription(s)}${s.has_estimated_sales ? " · Provisional sales" : ""}</div>
           ${owes ? `<div class="owes">Owes ${fmt(s.outstanding_balance)}</div>` : ""}
         </div>`;
     }
@@ -1000,6 +1003,7 @@ async function loadDashboard(epoch) {
 
     // ---- v14: everything the new screens need, then draw them
     D = {
+      saleAllocations: R.saleAllocations.data,
       prospects: R.prospects.data,
       followups: R.followups.data,
       scenarios: R.scenarios.data,

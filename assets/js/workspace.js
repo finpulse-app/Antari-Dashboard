@@ -197,7 +197,7 @@ function customerRows() {
 function renderDirectory() {
   const rows = customerRows();
   document.getElementById("customer-directory").innerHTML =
-    `<div class="table-scroll"><table class="tbl"><thead><tr><th>Customer</th><th>Territory / route</th><th class="num">Revenue</th><th class="num">Invoices</th><th class="num">Outstanding</th><th></th></tr></thead><tbody>${rows.map((s) => `<tr><td><button class="table-link" data-customer="${esc(s.store_name)}">${esc(s.store_name)}</button><span class="customer-meta">${esc(s.category || "Customer")}</span></td><td>${esc(s.zip || "No ZIP")}<span class="customer-meta">${esc(s.delivery_route || "Unassigned")}</span></td><td class="num">${fmt(s.total_revenue)}</td><td class="num">${Number(s.invoices)}</td><td class="num ${Number(s.outstanding_balance) > 0 ? "red-text" : ""}">${fmt(s.outstanding_balance)}</td><td><button class="btn-sm quiet" data-customer="${esc(s.store_name)}">Details ↗</button></td></tr>`).join("") || '<tr><td colspan="6">No matching customers.</td></tr>'}</tbody></table></div><p class="directory-count">${rows.length} of ${D.storeData.length} customers · All loaded reporting periods</p>`;
+    `<div class="table-scroll"><table class="tbl"><thead><tr><th>Customer</th><th>Territory / route</th><th class="num">Revenue</th><th class="num">Invoices</th><th class="num">Outstanding</th><th></th></tr></thead><tbody>${rows.map((s) => `<tr><td><button class="table-link" data-customer="${esc(s.store_name)}">${esc(s.store_name)}</button><span class="customer-meta">${esc(s.category || "Customer")}${s.has_estimated_sales ? " · Provisional sales" : ""}</span></td><td>${esc(s.zip || "No ZIP")}<span class="customer-meta">${esc(s.delivery_route || "Unassigned")}</span></td><td class="num">${fmt(s.total_revenue)}</td><td class="num">${invoiceDescription(s, false)}</td><td class="num ${Number(s.outstanding_balance) > 0 ? "red-text" : ""}">${fmt(s.outstanding_balance)}</td><td><button class="btn-sm quiet" data-customer="${esc(s.store_name)}">Details ↗</button></td></tr>`).join("") || '<tr><td colspan="6">No matching customers.</td></tr>'}</tbody></table></div><p class="directory-count">${rows.length} of ${D.storeData.length} customers · All loaded reporting periods</p>`;
 }
 document
   .getElementById("customer-filter")
@@ -227,6 +227,7 @@ document.getElementById("export-customers").addEventListener("click", () => {
       "Revenue",
       "Invoices",
       "Outstanding",
+      "Sales basis",
     ],
     ...customerRows().map((s) => [
       s.store_name,
@@ -234,8 +235,11 @@ document.getElementById("export-customers").addEventListener("click", () => {
       s.zip,
       s.delivery_route,
       Number(s.total_revenue).toFixed(2),
-      s.invoices,
+      invoiceDescription(s, false),
       Number(s.outstanding_balance).toFixed(2),
+      s.has_estimated_sales
+        ? "Includes provisional location allocation"
+        : "Reported customer sales",
     ]),
   ];
   const url = URL.createObjectURL(

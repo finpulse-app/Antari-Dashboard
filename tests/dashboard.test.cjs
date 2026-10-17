@@ -32,6 +32,7 @@ function makeApp({ preview = true, transform } = {}) {
   for (const name of [
     "core",
     "analytics",
+    "allocations",
     "screens",
     "parsers",
     "imports",
@@ -803,6 +804,49 @@ test("conditional discounts, refunds, and imprecise unit prices remain unasserte
       ),
       1000,
     );
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("provisional revenue splits keep source invoice counts once and label location counts as unassigned", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    assert.equal(
+      app.run(
+        "sourceInvoiceTotal([{id:1,is_allocated:true,invoice_count:null,source_invoice_count:2},{id:1,is_allocated:true,invoice_count:null,source_invoice_count:2},{id:1,is_allocated:true,invoice_count:null,source_invoice_count:2},{id:2,invoice_count:3}])",
+      ),
+      5,
+    );
+    assert.equal(
+      app.run(
+        "invoiceDescription({has_estimated_sales:true,invoices:null},false)",
+      ),
+      "Unassigned by location",
+    );
+    app.run(
+      'D.saleAllocations=[{source_sale_id:1,store_name:D.stores[0].store_name,allocated_sales:100,notes:"Owner estimate",is_active:true},{source_sale_id:1,store_name:D.stores[1].store_name,allocated_sales:100,notes:"Owner estimate",is_active:true}];renderSalesAllocationPanel(D)',
+    );
+    const text =
+      app.dom.window.document.querySelector("#sales-allocations").textContent;
+    assert.match(text, /PROVISIONAL OWNER ESTIMATE/);
+    assert.match(text, /\$200.00 divided across 2/);
+    assert.match(text, /Disable split/);
+    assert.match(text, /Payments and balances are unchanged/);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("an active split cannot be silently overwritten by an ordinary name mapping", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run("D.mappedRows[0].is_allocated=true");
+    const message = await app.run(
+      'saveMapping([{zoho_name:D.mappedRows[0].zoho_name,mapped_store:"Other"}])',
+    );
+    assert.match(message.message, /Disable.*provisional sales split/);
   } finally {
     app.dom.window.close();
   }
