@@ -1,4 +1,5 @@
-import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 const dist = path.join(root, "dist");
@@ -67,3 +68,35 @@ await cp(
   path.join(root, "node_modules/leaflet/LICENSE"),
   path.join(dist, "vendor/leaflet/LICENSE"),
 );
+
+// Every document references the exact asset contents shipped with this build.
+// This prevents stale cached scripts from being mixed with a newer page.
+const entries = [
+  "index.html",
+  ...(process.argv.includes("--preview") ? ["preview.html"] : []),
+];
+for (const entry of entries) {
+  const target = path.join(dist, entry);
+  let html = await readFile(target, "utf8");
+  const assetPattern =
+    /(src|href)="((?:assets|vendor)\/[^"?]+|preview-data\.js)"/g;
+  const assets = [
+    ...new Set([...html.matchAll(assetPattern)].map((match) => match[2])),
+  ];
+  const versions = new Map(
+    await Promise.all(
+      assets.map(async (asset) => [
+        asset,
+        createHash("sha256")
+          .update(await readFile(path.join(dist, asset)))
+          .digest("hex")
+          .slice(0, 12),
+      ]),
+    ),
+  );
+  html = html.replace(
+    assetPattern,
+    (_, attribute, asset) => `${attribute}="${asset}?v=${versions.get(asset)}"`,
+  );
+  await writeFile(target, html);
+}

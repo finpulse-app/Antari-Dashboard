@@ -919,3 +919,29 @@ test("business category options group grocery aliases and signout clears the sha
     app.dom.window.close();
   }
 });
+
+test("production build versions every entry-page asset by its file contents", async () => {
+  const { spawnSync } = require("node:child_process");
+  const { createHash } = require("node:crypto");
+  const built = spawnSync(process.execPath, ["scripts/build.mjs"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(built.status, 0, built.stderr);
+  const html = readFileSync(root + "dist/index.html", "utf8");
+  const assets = [
+    ...html.matchAll(
+      /(?:src|href)="((?:assets|vendor)\/[^"?]+)\?v=([a-f0-9]{12})"/g,
+    ),
+  ];
+  assert.ok(assets.length > 15);
+  for (const [, asset, version] of assets)
+    assert.equal(
+      version,
+      createHash("sha256")
+        .update(readFileSync(root + "dist/" + asset))
+        .digest("hex")
+        .slice(0, 12),
+    );
+  assert.doesNotMatch(html, /(?:src|href)="(?:assets|vendor)\/[^"?]+"/);
+});
