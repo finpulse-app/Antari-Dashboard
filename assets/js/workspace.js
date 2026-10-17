@@ -174,7 +174,7 @@ function customerRows() {
     .getElementById("customer-filter")
     .value.trim()
     .toLowerCase();
-  const rows = D.storeData.filter((s) =>
+  const rows = D.storeData.filter(matchesBusinessType).filter((s) =>
     [s.store_name, s.zip, s.delivery_route, s.category].some((v) =>
       String(v || "")
         .toLowerCase()
@@ -196,6 +196,10 @@ function customerRows() {
 }
 function renderDirectory() {
   const rows = customerRows();
+  document.getElementById("stores-top-bottom").hidden =
+    Boolean(activeBusinessType);
+  document.getElementById("stores-all-view").hidden =
+    Boolean(activeBusinessType);
   document.getElementById("customer-directory").innerHTML =
     `<div class="table-scroll"><table class="tbl"><thead><tr><th>Customer</th><th>Territory / route</th><th class="num">Revenue</th><th class="num">Invoices</th><th class="num">Outstanding</th><th></th></tr></thead><tbody>${rows.map((s) => `<tr><td><button class="table-link" data-customer="${esc(s.store_name)}">${esc(s.store_name)}</button><span class="customer-meta">${esc(s.category || "Customer")}${s.has_estimated_sales ? " · Provisional sales" : ""}</span></td><td>${esc(s.zip || "No ZIP")}<span class="customer-meta">${esc(s.delivery_route || "Unassigned")}</span></td><td class="num">${fmt(s.total_revenue)}</td><td class="num">${invoiceDescription(s, false)}</td><td class="num ${Number(s.outstanding_balance) > 0 ? "red-text" : ""}">${fmt(s.outstanding_balance)}</td><td><button class="btn-sm quiet" data-customer="${esc(s.store_name)}">Details ↗</button></td></tr>`).join("") || '<tr><td colspan="6">No matching customers.</td></tr>'}</tbody></table></div><p class="directory-count">${rows.length} of ${D.storeData.length} customers · All loaded reporting periods</p>`;
 }
@@ -281,6 +285,7 @@ function renderWorkspace(d) {
   document.getElementById("mobile-sales").textContent = fmtCompact(total);
   document.getElementById("mobile-owed").textContent = fmtCompact(owed);
   renderDailyBriefing(d);
+  renderBusinessTypeControls(d);
   renderTerritoryStudio(d);
   renderDirectory();
   if (typeof renderTerritories === "function") renderTerritories(d);

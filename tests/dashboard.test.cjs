@@ -32,6 +32,7 @@ function makeApp({ preview = true, transform } = {}) {
   for (const name of [
     "core",
     "analytics",
+    "business-types",
     "allocations",
     "screens",
     "parsers",
@@ -847,6 +848,73 @@ test("an active split cannot be silently overwritten by an ordinary name mapping
       'saveMapping([{zoho_name:D.mappedRows[0].zoho_name,mapped_store:"Other"}])',
     );
     assert.match(message.message, /Disable.*provisional sales split/);
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("business type filters synchronize map and directory and preserve overall financial totals", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const total = app.run("D.wholesale+D.direct");
+    const select = app.dom.window.document.querySelector(
+      "#customer-business-type",
+    );
+    select.value = "restaurant";
+    select.dispatchEvent(new app.dom.window.Event("change", { bubbles: true }));
+    assert.equal(
+      app.dom.window.document.querySelector("#map-business-type").value,
+      "restaurant",
+    );
+    assert.equal(app.run("customerRows().length"), 1);
+    assert.equal(app.run("customerRows()[0].category"), "Restaurant");
+    assert.equal(
+      app.run("[...territoryStats(D).values()].flatMap(g=>g.customers).length"),
+      1,
+    );
+    assert.equal(
+      app.dom.window.document.querySelector("#stores-top-bottom").hidden,
+      true,
+    );
+    assert.match(
+      app.dom.window.document.querySelector("#business-filter-status")
+        .textContent,
+      /Restaurants.*1 matching customers/,
+    );
+    assert.equal(app.run("D.wholesale+D.direct"), total);
+    select.value = "";
+    select.dispatchEvent(new app.dom.window.Event("change", { bubbles: true }));
+    assert.equal(app.run("customerRows().length"), 8);
+    assert.equal(
+      app.dom.window.document.querySelector("#stores-top-bottom").hidden,
+      false,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("business category options group grocery aliases and signout clears the shared selection", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    assert.equal(app.run('businessTypeKey("Groceries")'), "market");
+    assert.equal(app.run('businessTypeKey("Bakeries")'), "bakery");
+    const select = app.dom.window.document.querySelector("#map-business-type");
+    select.value = "bakery";
+    select.dispatchEvent(new app.dom.window.Event("change", { bubbles: true }));
+    assert.equal(app.run("customerRows().length"), 2);
+    assert.match(
+      app.dom.window.document.querySelector("#business-filter-status")
+        .textContent,
+      /Bakeries/,
+    );
+    app.run("clearWorkspace()");
+    assert.equal(app.run("activeBusinessType"), "");
+    assert.equal(
+      app.dom.window.document.querySelector("#business-filter-status").hidden,
+      true,
+    );
   } finally {
     app.dom.window.close();
   }
