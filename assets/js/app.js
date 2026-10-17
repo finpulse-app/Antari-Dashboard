@@ -137,6 +137,10 @@ async function loadDashboard(epoch) {
   try {
     // Each query is named, and results are read back BY NAME: so a reordering typo can't scramble the data again.
     const queries = {
+      visitNotes: () =>
+        sb
+          .from("customer_visit_notes")
+          .select("id,store_name,note,created_at,recorded_by_email"),
       storeRank: () =>
         sb.from("v_store_ranking").select("*").order("revenue_rank"),
       prodRank: () =>
@@ -196,6 +200,7 @@ async function loadDashboard(epoch) {
           .order("imported_at", { ascending: false }),
     };
     const orderKeys = {
+      visitNotes: ["id"],
       storeRank: ["store_name"],
       prodRank: ["item_name"],
       ar: ["store_name"],
@@ -981,6 +986,7 @@ async function loadDashboard(epoch) {
 
     // ---- v14: everything the new screens need, then draw them
     D = {
+      visitNotes: R.visitNotes.data,
       storeData,
       stores: stores.data,
       mappedRows: mappedRows.data,

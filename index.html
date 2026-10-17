@@ -29,7 +29,9 @@
     <script src="assets/js/parsers.js" defer></script>
     <script src="assets/js/imports.js" defer></script>
     <script src="assets/js/app.js" defer></script>
+    <script src="assets/js/neighborhoods.js" defer></script>
     <script src="assets/js/territories.js" defer></script>
+    <script src="assets/js/fieldwork.js" defer></script>
     <script src="assets/js/workspace.js" defer></script>
   </head>
   <body>
@@ -99,6 +101,14 @@
       >
         ↻</button
       ><span class="sync-status" id="sync-status">Owner access</span>
+      <button
+        id="mobile-search-toggle"
+        class="icon-button"
+        aria-label="Search the workspace"
+        aria-expanded="false"
+      >
+        ⌕
+      </button>
       <div class="auth-badge" id="auth-badge"></div>
     </div>
     <main class="wrap" id="main-content">
@@ -164,6 +174,13 @@
           >
         </div>
         <div id="refresh-warning" role="alert" hidden></div>
+        <div class="mobile-totals" aria-label="Business totals">
+          <button data-goto="overview">
+            <span>Reported sales</span><b id="mobile-sales">Loading</b></button
+          ><button data-goto="receivables">
+            <span>Outstanding</span><b id="mobile-owed">Loading</b>
+          </button>
+        </div>
         <div class="kpi-row">
           <div class="kpi total">
             <div class="val" id="kpi-total">Not available</div>
@@ -188,6 +205,17 @@
         </div>
 
         <div class="panel active" id="panel-overview" aria-label="Overview">
+          <section class="daily-briefing" aria-labelledby="briefing-title">
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">YOUR WORKDAY</span>
+                <h2 id="briefing-title">Today’s priorities</h2>
+              </div>
+              <span id="briefing-date"></span>
+            </div>
+            <div id="daily-priorities" class="priority-grid"></div>
+            <p id="briefing-basis" class="briefing-basis"></p>
+          </section>
           <div class="overview-feature">
             <div class="revenue-card">
               <div class="card-heading">
@@ -202,10 +230,10 @@
               <div id="channel-composition"></div>
             </div>
             <div class="action-card">
-              <span class="eyebrow">YOUR NEXT MOVE</span>
-              <h2>Needs your<br />attention</h2>
+              <span class="eyebrow">YOUR REPORTS</span>
+              <h2>Report dates</h2>
               <div id="owner-actions"></div>
-              <span class="action-foot">REVIEW WHAT NEEDS ATTENTION</span>
+              <span class="action-foot">REPORT COVERAGE MATTERS</span>
             </div>
           </div>
           <div class="section-heading">
@@ -249,6 +277,7 @@
               </select>
             </div>
           </div>
+          <div id="map-coverage" class="map-coverage" aria-live="polite"></div>
           <div class="territory-layout">
             <div class="territory-map-card">
               <div
@@ -576,7 +605,8 @@
           ></span>
         </div>
         <div id="modal-history"></div>
-        <button class="modal-close" data-action="closeModal">Close</button>
+        <button class="btn-sm quiet" id="modal-visit-note">Visit notes</button
+        ><button class="modal-close" data-action="closeModal">Close</button>
       </div>
     </div>
 
@@ -590,6 +620,16 @@
         tabindex="-1"
       ></div>
     </div>
+    <nav class="mobile-actions" aria-label="Field shortcuts">
+      <button data-goto="overview"><span aria-hidden="true">▦</span>Home</button
+      ><button data-field="customers">
+        <span aria-hidden="true">◉</span>Customers</button
+      ><button data-field="payment">
+        <span aria-hidden="true">↙</span>Payment</button
+      ><button data-field="note">
+        <span aria-hidden="true">✎</span>Visit note</button
+      ><button data-field="more"><span aria-hidden="true">☰</span>More</button>
+    </nav>
     <div id="toast" role="status">
       <span id="toast-msg"></span
       ><button type="button" id="toast-undo" style="display: none">Undo</button>

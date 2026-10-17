@@ -36,6 +36,15 @@ const viewInfo = {
 };
 function navigateTo(view, updateHash = true) {
   if (!viewInfo[view]) view = "overview";
+  document.body.dataset.view = view;
+  document.body.classList.remove("search-open");
+  document
+    .getElementById("mobile-search-toggle")
+    .setAttribute("aria-expanded", "false");
+  if (updateHash) {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
   document.querySelectorAll(".tab").forEach((tab) => {
     const active = tab.dataset.tab === view;
     tab.classList.toggle("active", active);
@@ -86,7 +95,13 @@ document.addEventListener("keydown", (e) => {
     if (D) document.getElementById("global-search").focus();
   }
   if (e.key === "Escape") {
-    document.body.classList.remove("nav-open");
+    document.body.classList.remove("nav-open", "search-open");
+    document
+      .getElementById("menu-toggle")
+      .setAttribute("aria-expanded", "false");
+    document
+      .getElementById("mobile-search-toggle")
+      .setAttribute("aria-expanded", "false");
     document.getElementById("search-results").style.display = "none";
   }
   if (
@@ -250,38 +265,7 @@ function renderWorkspace(d) {
   const periods = (source) => sourceSummary(d.srcMonths, source);
   document.getElementById("channel-composition").innerHTML =
     `<div class="composition-inner"><div class="channel-ring"><svg viewBox="0 0 120 120" role="img" aria-label="Wholesale ${share.toFixed(1)} percent, festival ${(100 - share).toFixed(1)} percent of loaded revenue"><circle cx="60" cy="60" r="49" fill="none" stroke="#e7e9df" stroke-width="11"/><circle cx="60" cy="60" r="49" fill="none" stroke="#ba995e" stroke-width="11" pathLength="100" stroke-dasharray="${total > 0 ? 100 : 0} 100"/><circle cx="60" cy="60" r="49" fill="none" stroke="#31554a" stroke-width="11" pathLength="100" stroke-dasharray="${Math.max(0, Math.min(100, share))} 100"/></svg><div class="ring-label"><b>${fmtCompact(total)}</b><small>Reported sales</small></div></div><div class="channel-legend"><div class="legend-row"><i></i><span>Wholesale<small>${share.toFixed(1)}% of loaded revenue</small></span><b>${fmt(d.wholesale)}</b></div><div class="legend-row festival"><i></i><span>Direct / festival<small>${total > 0 ? (100 - share).toFixed(1) : "0.0"}% of loaded revenue</small></span><b>${fmt(d.direct)}</b></div></div></div><div class="composition-note">Wholesale: ${esc(periods("wholesale"))}. Festival: ${esc(periods("festival"))}.<br>Each channel includes its own loaded date coverage; these are not necessarily matching periods. Square item reports use gross sales, before discounts, refunds, taxes, and fees.</div>`;
-  const owed = sumOf(d.openBalances, (x) => x.outstanding_balance),
-    unreviewed = d.unresolved.length;
-  const actions = [
-    {
-      view: "receivables",
-      value: fmt(owed),
-      label: owed > 0 ? "Review outstanding balances" : "No open balances",
-      note: "Snapshot less dashboard payments",
-    },
-    {
-      view: "data",
-      value: String(unreviewed).padStart(2, "0"),
-      label: unreviewed
-        ? "Customer names need a decision"
-        : "Customer names reviewed",
-      note: "Keep customer rankings accurate",
-    },
-    {
-      view: "zips",
-      value: String(
-        new Set(d.stores.map((s) => s.zip).filter(Boolean)).size,
-      ).padStart(2, "0"),
-      label: "Explore your territories",
-      note: "Coverage, customers, and collections",
-    },
-  ];
-  document.getElementById("owner-actions").innerHTML = actions
-    .map(
-      (a) =>
-        `<button class="action-row" data-goto="${a.view}"><span>${a.value}</span><span><b>${a.label}</b><small>${a.note}</small></span></button>`,
-    )
-    .join("");
+  const owed = sumOf(d.openBalances, (x) => x.outstanding_balance);
   const navs = ["overview", "stores", "upload", "receivables", "data"];
   document.querySelectorAll(".kpi").forEach((card, i) => {
     card.setAttribute("role", "button");
@@ -289,6 +273,9 @@ function renderWorkspace(d) {
     card.dataset.goto = navs[i];
     card.title = card.querySelector(".val").textContent;
   });
+  document.getElementById("mobile-sales").textContent = fmtCompact(total);
+  document.getElementById("mobile-owed").textContent = fmtCompact(owed);
+  renderDailyBriefing(d);
   renderDirectory();
   if (typeof renderTerritories === "function") renderTerritories(d);
   enhanceInteractions();
@@ -335,16 +322,14 @@ observer.observe(document.getElementById("content"), {
   childList: true,
   subtree: true,
 });
-document
-  .querySelectorAll(".modal-backdrop")
-  .forEach((m) =>
-    observer.observe(m, {
-      attributes: true,
-      attributeFilter: ["class"],
-      childList: true,
-      subtree: true,
-    }),
-  );
+document.querySelectorAll(".modal-backdrop").forEach((m) =>
+  observer.observe(m, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  }),
+);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
   const open = [...document.querySelectorAll(".modal-backdrop.open")].at(-1);

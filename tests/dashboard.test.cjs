@@ -39,6 +39,8 @@ function makeApp({ preview = true, transform } = {}) {
     "parsers",
     "imports",
     "app",
+    "neighborhoods",
+    "fieldwork",
     "workspace",
   ])
     vm.runInContext(readFileSync(root + `assets/js/${name}.js`, "utf8"), ctx, {
@@ -402,6 +404,87 @@ test("payment dates use New York's business day when the owner travels", () => {
     assert.equal(
       app.run('businessDay(new Date("2026-10-18T01:00:00Z"))'),
       "2026-10-17",
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("daily briefing puts payment uncertainty ahead of collection prompts", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const tasks = app.run(
+      'buildDailyBriefing({...D,payLog:[{paid_on:"2026-09-01",as_of_date:"2026-09-30",amount:50}],unresolved:[{zoho_name:"Unknown customer",revenue:100}]})',
+    );
+    assert.equal(tasks[0].kind, "payment-review");
+    assert.ok(tasks.some((t) => t.kind === "names"));
+    assert.ok(!tasks.some((t) => t.kind === "collection"));
+    assert.doesNotMatch(tasks.map((t) => t.title).join(" "), /overdue/i);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("map coverage excludes Other buyers and customers without mapped boundaries", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const coverage = app.run(
+      'territoryCoverage({storeData:[{zip:"11235",total_revenue:100},{zip:"99999",total_revenue:50},{zip:null,total_revenue:25}],wholesale:1000,otherTotal:825})',
+    );
+    assert.equal(coverage.mappedSales, 100);
+    assert.equal(coverage.otherSales, 825);
+    assert.equal(coverage.unplacedSales, 75);
+    assert.equal(coverage.percent, 10);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("field actions open payment selection and shared notes, with failed saves preserved", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run("openFieldPayment()");
+    assert.match(
+      app.dom.window.document.querySelector("#gm-modal").textContent,
+      /Cedar Market/,
+    );
+    app.run('openVisitNotes("Cedar Market")');
+    app.dom.window.document.querySelector("#visit-note").value =
+      "Checked shelf stock.";
+    app.dom.window.document.querySelector("#visit-save").click();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.match(
+      app.dom.window.document.querySelector("#visit-error").textContent,
+      /disabled/,
+    );
+    assert.equal(
+      app.dom.window.document.querySelector("#visit-note").value,
+      "Checked shelf stock.",
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("phone search toggles accessibly and navigation carries the active view", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.dom.window.document.querySelector("#mobile-search-toggle").click();
+    assert.equal(
+      app.dom.window.document
+        .querySelector("#mobile-search-toggle")
+        .getAttribute("aria-expanded"),
+      "true",
+    );
+    app.run('navigateTo("stores")');
+    assert.equal(app.dom.window.document.body.dataset.view, "stores");
+    assert.equal(
+      app.dom.window.document.body.classList.contains("search-open"),
+      false,
+    );
+    assert.equal(
+      app.dom.window.document.querySelectorAll(".mobile-actions button").length,
+      5,
     );
   } finally {
     app.dom.window.close();
