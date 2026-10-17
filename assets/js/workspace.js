@@ -22,8 +22,8 @@ const viewInfo = {
   ],
   routes: ["Delivery routes", "Your customer network, organized for the road."],
   zips: [
-    "Your territories",
-    "Choose a ZIP to see your customers, sales, and balances.",
+    "Territory insights",
+    "Explore your footprint. Prepare your next conversation. Plan your next move.",
   ],
   data: [
     "Data confidence",
@@ -35,6 +35,7 @@ const viewInfo = {
   ],
 };
 function navigateTo(view, updateHash = true) {
+  if (view === "routes") view = "zips";
   if (!viewInfo[view]) view = "overview";
   document.body.dataset.view = view;
   document.body.classList.remove("search-open");
@@ -276,6 +277,7 @@ function renderWorkspace(d) {
   document.getElementById("mobile-sales").textContent = fmtCompact(total);
   document.getElementById("mobile-owed").textContent = fmtCompact(owed);
   renderDailyBriefing(d);
+  renderTerritoryStudio(d);
   renderDirectory();
   if (typeof renderTerritories === "function") renderTerritories(d);
   enhanceInteractions();
@@ -335,7 +337,9 @@ document.addEventListener("keydown", (e) => {
   const open = [...document.querySelectorAll(".modal-backdrop.open")].at(-1);
   if (!open) return;
   const items = [
-    ...open.querySelectorAll('button,input,select,a[href],[tabindex="0"]'),
+    ...open.querySelectorAll(
+      'button,input,textarea,select,a[href],[tabindex="0"]',
+    ),
   ].filter((el) => !el.disabled && el.getClientRects().length);
   if (!items.length) {
     e.preventDefault();
@@ -355,6 +359,17 @@ document.addEventListener("keydown", (e) => {
     first.focus();
   }
 });
+// Register auth only after the last deferred module and all load helpers exist.
+sb.auth.onAuthStateChange((event, session) => {
+  if (
+    ["INITIAL_SESSION", "SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(
+      event,
+    )
+  ) {
+    setTimeout(() => applySession(session).catch(showLoadError), 0);
+  }
+});
+
 if (isPreview)
   applySession({ user: { id: "preview", email: "Design preview" } }).catch(
     showLoadError,

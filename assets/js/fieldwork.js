@@ -13,6 +13,18 @@ function buildDailyBriefing(d) {
       action: "Review payment log",
       value: fmt(sumOf(suspect, (p) => p.amount)),
     });
+  const dueActions = (d.followups || []).filter(
+    (f) => !f.completed && f.due_on <= businessDay(),
+  );
+  if (dueActions.length)
+    tasks.push({
+      kind: "followups",
+      view: "zips",
+      title: "Follow through on your customer actions",
+      detail: `${dueActions.length} customer action${dueActions.length === 1 ? " is" : "s are"} due on or before today. These dates were set by the owners.`,
+      action: "Review next actions",
+      value: String(dueActions.length),
+    });
   if (d.unresolved.length) {
     const amount = sumOf(d.unresolved, (r) => r.revenue);
     tasks.push({
@@ -139,6 +151,7 @@ function openFieldPayment() {
 }
 function openVisitNotes(selected = "") {
   if (!D) return;
+  const visitId = crypto.randomUUID();
   const stores = [...D.stores].sort((a, b) =>
     a.store_name.localeCompare(b.store_name),
   );
@@ -149,6 +162,7 @@ function openVisitNotes(selected = "") {
     .getElementById("visit-store")
     .addEventListener("change", renderVisitHistory);
   renderVisitHistory();
+  installVisitCapture();
   document.getElementById("visit-save").addEventListener("click", async () => {
     const store = document.getElementById("visit-store").value,
       note = document.getElementById("visit-note").value.trim(),
@@ -162,12 +176,14 @@ function openVisitNotes(selected = "") {
     button.disabled = true;
     error.textContent = "";
     try {
+      const capture =
+        document.getElementById("note-sale-fields")?.getCapture?.() || {};
       const result = await sb
         .from("customer_visit_notes")
-        .insert({ store_name: store, note });
+        .insert({ id: visitId, store_name: store, note, ...capture });
       if (result.error) throw result.error;
       if (epoch !== authEpoch) return;
-      gmClose();
+      if (button.isConnected) gmClose();
       showToast("Visit note saved for both owners.");
       await reloadAfterWrite();
     } catch (err) {
@@ -186,7 +202,7 @@ function renderVisitHistory() {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 8);
   document.getElementById("visit-history").innerHTML = name
-    ? `<h4>Recent notes</h4>${notes.map((n) => `<article class="visit-entry"><small>${esc(n.recorded_by_email || "Owner")} · ${esc(new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</small><p>${esc(n.note)}</p></article>`).join("") || '<p class="empty-note">No visit notes for this customer yet.</p>'}`
+    ? `<h4>Recent notes</h4>${notes.map((n) => `<article class="visit-entry"><small>${esc(n.recorded_by_email || "Owner")} · ${esc(new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</small><p>${esc(n.note)}</p>${saleNoteSummary(n)}</article>`).join("") || '<p class="empty-note">No visit notes for this customer yet.</p>'}`
     : "";
 }
 document.addEventListener("click", (e) => {
@@ -213,6 +229,13 @@ document.addEventListener("click", (e) => {
   const priority = e.target.closest("[data-priority]");
   if (priority && D) {
     navigateTo(priority.dataset.priorityView);
+    if (priority.dataset.priority === "followups") {
+      setStudioView("explore");
+      attentionOpen = true;
+      selectedTerritoryCustomer = null;
+      renderTerritoryDetail();
+      return;
+    }
     if (priority.dataset.priorityCustomer) {
       openPaymentModal(priority.dataset.priorityCustomer);
       return;

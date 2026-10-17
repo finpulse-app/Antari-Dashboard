@@ -19,6 +19,7 @@ function territoryStats(d) {
         revenue: 0,
         outstanding: 0,
         invoices: 0,
+        prospects: 0,
       });
     const group = groups.get(zip);
     group.customers.push(customer);
@@ -26,11 +27,27 @@ function territoryStats(d) {
     group.outstanding += Number(customer.outstanding_balance);
     group.invoices += Number(customer.invoices);
   }
+  for (const p of (d.prospects || []).filter(
+    (p) => !p.archived && p.stage !== "paused" && p.stage !== "repeat_buyer",
+  )) {
+    if (!groups.has(p.zip))
+      groups.set(p.zip, {
+        zip: p.zip,
+        customers: [],
+        revenue: 0,
+        outstanding: 0,
+        invoices: 0,
+        prospects: 0,
+      });
+    groups.get(p.zip).prospects++;
+  }
   return groups;
 }
 function metricValue(group) {
   const metric = document.getElementById("map-metric").value;
-  return metric === "customers" ? group.customers.length : group[metric];
+  return metric === "customers"
+    ? group.customers.length
+    : Number(group[metric] || 0);
 }
 function territoryColor(group) {
   if (!group) return "#e0e4d9";
@@ -47,7 +64,7 @@ function territoryStyle(feature) {
     color: zip === selectedZip ? "#b58a40" : group ? "#fcfcf5" : "#c9d0c3",
     weight: zip === selectedZip ? 3 : group ? 1.5 : 0.6,
     fillColor: territoryColor(group),
-    fillOpacity: group?.customers.length ? 0.95 : 0.65,
+    fillOpacity: group && metricValue(group) > 0 ? 0.95 : 0.65,
   };
 }
 async function renderTerritories(d) {
@@ -57,12 +74,23 @@ async function renderTerritories(d) {
   const groups = [...territoryGroups.values()].sort(
     (a, b) => b.revenue - a.revenue,
   );
-  if (!territoryGroups.has(selectedZip)) selectedZip = groups[0]?.zip || null;
+  if (!territoryGroups.has(selectedZip)) {
+    if (selectedZip && Object.hasOwn(neighborhoodContext.areas, selectedZip))
+      territoryGroups.set(selectedZip, {
+        zip: selectedZip,
+        customers: [],
+        revenue: 0,
+        outstanding: 0,
+        invoices: 0,
+        prospects: 0,
+      });
+    else selectedZip = groups[0]?.zip || null;
+  }
   renderZipPills();
   renderTerritoryDetail();
   const coverage = territoryCoverage(d);
   document.getElementById("map-coverage").innerHTML =
-    `<strong>${fmt(coverage.mappedSales)} on the map</strong><p>${coverage.percent === null ? "No wholesale sales loaded." : `${coverage.percent.toFixed(1)}% of loaded wholesale sales is assigned to listed customers within the map boundaries.`}<br>${fmt(coverage.otherSales)} is grouped under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are not assigned to ZIPs.</p><button class="btn-sm quiet" data-goto="data">Review customer matching ↗</button>`;
+    `<div class="coverage-icon" aria-hidden="true">◎</div><div><strong>${coverage.percent === null ? "No wholesale sales loaded" : `${coverage.percent.toFixed(1)}% of wholesale sales is placed on the map`}</strong><p>${fmt(coverage.mappedSales)} is assigned to listed customers within these boundaries. ${fmt(coverage.otherSales)} is under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are separate.</p></div><button class="btn-sm quiet" data-goto="data">Improve coverage ↗</button>`;
   if (!territoryMap) {
     territoryMap = L.map("territory-map", {
       zoomControl: true,
@@ -117,15 +145,23 @@ async function renderTerritories(d) {
       onEachFeature: (feature, layer) => {
         const zip = feature.properties.zcta5,
           group = territoryGroups.get(zip);
+        layer.on("click", () => selectTerritory(zip));
+        layer.bindTooltip(
+          () => {
+            const tip = document.createElement("div"),
+              current = territoryGroups.get(zip),
+              metric = document.getElementById("map-metric").value;
+            const value = current ? metricValue(current) : 0;
+            tip.textContent = `${zip} · ${{ revenue: "Listed sales", outstanding: "Listed balances", customers: "Customers", prospects: "Prospects to develop" }[metric]}: ${["revenue", "outstanding"].includes(metric) ? fmt(value) : value}`;
+            return tip;
+          },
+          { sticky: true },
+        );
+        layer.on("mouseover", () =>
+          layer.setStyle({ weight: 3, color: "#a3844a" }),
+        );
+        layer.on("mouseout", () => territoryLayer.resetStyle(layer));
         if (group) {
-          const tip = document.createElement("div");
-          tip.textContent = `${zip} (${(neighborhoodContext.areas[zip] || []).join(", ")}) · ${group.customers.length} customers · ${fmt(group.revenue)}`;
-          layer.bindTooltip(tip, { sticky: true });
-          layer.on("click", () => selectTerritory(zip));
-          layer.on("mouseover", () =>
-            layer.setStyle({ weight: 3, color: "#a3844a" }),
-          );
-          layer.on("mouseout", () => territoryLayer.resetStyle(layer));
           const lat = Number(feature.properties.centlat),
             lng = Number(feature.properties.centlon);
           const marker = L.marker([lat, lng], {
@@ -143,8 +179,9 @@ async function renderTerritories(d) {
       },
     }).addTo(territoryMap);
     territoryLayer.eachLayer((layer) => {
-      if (territoryGroups.has(layer.feature.properties.zcta5)) {
-        layer.bringToFront();
+      {
+        if (territoryGroups.has(layer.feature.properties.zcta5))
+          layer.bringToFront();
         const el = layer.getElement();
         if (el) {
           el.setAttribute("tabindex", "0");
@@ -192,43 +229,68 @@ function fitTerritories() {
 function refreshTerritoryMap() {
   if (!territoryMap) return;
   territoryMap.invalidateSize();
-  fitTerritories();
+  if (!territoryLayer) return;
+  if (!territoryMap._antariFitted) {
+    fitTerritories();
+    territoryMap._antariFitted = true;
+  } else updateMapLabels();
 }
 function selectTerritory(zip) {
+  if (!territoryGroups.has(zip))
+    territoryGroups.set(zip, {
+      zip,
+      customers: [],
+      revenue: 0,
+      outstanding: 0,
+      invoices: 0,
+      prospects: 0,
+    });
   selectedZip = zip;
+  selectedTerritoryCustomer = null;
+  attentionOpen = false;
   renderTerritoryDetail();
   renderZipPills();
   if (territoryLayer) territoryLayer.setStyle(territoryStyle);
   updateMapLabels();
 }
 function renderZipPills() {
-  document.getElementById("territory-zip-list").innerHTML = [
-    ...territoryGroups.values(),
-  ]
-    .sort((a, b) => a.zip.localeCompare(b.zip))
-    .map(
-      (group) =>
-        `<button class="zip-pill ${group.zip === selectedZip ? "selected" : ""}" data-territory="${esc(group.zip)}" aria-pressed="${group.zip === selectedZip}">${esc(group.zip)}<small>${group.customers.length}</small></button>`,
-    )
-    .join("");
+  const q = (document.getElementById("territory-search")?.value || "")
+    .trim()
+    .toLowerCase();
+  const zips = q
+    ? [
+        ...new Set([
+          ...territoryGroups.keys(),
+          ...Object.keys(neighborhoodContext.areas),
+        ]),
+      ]
+    : [...territoryGroups.keys()].filter((zip) => {
+        const g = territoryGroups.get(zip);
+        return g.customers.length || g.prospects || zip === selectedZip;
+      });
+  document.getElementById("territory-zip-list").innerHTML =
+    zips
+      .filter(
+        (zip) =>
+          !q ||
+          zip.toLowerCase().includes(q) ||
+          (neighborhoodContext.areas[zip] || [])
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+      )
+      .sort()
+      .slice(0, 35)
+      .map(
+        (zip) =>
+          `<button class="zip-pill ${zip === selectedZip ? "selected" : ""}" data-territory="${esc(zip)}" aria-pressed="${zip === selectedZip}">${esc(zip)}<small>${territoryGroups.get(zip)?.customers.length || 0}</small></button>`,
+      )
+      .join("") ||
+    '<p class="empty-note">No matching NYC ZIP areas or listed customer ZIPs.</p>';
 }
 function renderTerritoryDetail() {
-  const group = territoryGroups.get(selectedZip),
-    box = document.getElementById("territory-details");
-  if (!group) {
-    box.innerHTML =
-      '<span class="eyebrow">YOUR TERRITORIES</span><h2>Start with a customer.</h2><p class="empty-note">Add customers with ZIP codes to see your distribution footprint.</p>';
-    return;
-  }
-  const ranked = [...group.customers].sort(
-    (a, b) => Number(b.total_revenue) - Number(a.total_revenue),
-  );
-  const total = sumOf(territoryDataset.storeData, (s) => s.total_revenue),
-    active = ranked.filter((s) => Number(s.total_revenue) > 0),
-    routes = new Set(ranked.map((s) => s.delivery_route).filter(Boolean));
-  const highest = ranked[0],
-    share = total > 0 ? (group.revenue / total) * 100 : 0;
-  box.innerHTML = `<span class="eyebrow">TERRITORY PROFILE</span><h2>${esc(group.zip)}</h2><p class="nearby-areas">Nearby: ${esc((neighborhoodContext.areas[group.zip] || []).join(" / ") || "Area reference unavailable")}</p><p class="territory-summary">${group.customers.length} customer${group.customers.length === 1 ? "" : "s"} · ${routes.size} delivery route${routes.size === 1 ? "" : "s"}</p><div class="territory-metrics"><div><small>Listed-customer sales</small><b>${fmt(group.revenue)}</b></div><div><small>Outstanding balance</small><b class="red-text">${fmt(group.outstanding)}</b></div></div><div class="territory-insight"><span class="eyebrow">WHAT TO KNOW</span><p>${share.toFixed(1)}% of listed-customer revenue comes from this territory. ${active.length} of ${ranked.length} customers have purchases in loaded reports.${highest && Number(highest.total_revenue) > 0 ? ` ${esc(highest.store_name)} leads with ${fmt(highest.total_revenue)}.` : ""}</p></div><div class="territory-customers">${ranked.map((s) => `<button data-customer="${esc(s.store_name)}"><span>${esc(s.store_name)}<small>${esc(s.delivery_route || "Unassigned route")}</small></span><span>${fmt(s.total_revenue)}<small>${Number(s.outstanding_balance) > 0 ? `${fmt(s.outstanding_balance)} owed` : "No open balance"}</small></span></button>`).join("")}</div><button class="btn-sm quiet" data-goto="receivables">Open collections workspace ↗</button><p class="map-note">Nearby area names are context from NYC neighborhood statistics, not exact ZIP boundaries. <a href="https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd" target="_blank" rel="noopener noreferrer">Neighborhood source</a>. Figures cover listed customers in this ZIP, not all Antari sales.</p>`;
+  if (typeof renderStudioTerritoryDetail === "function")
+    renderStudioTerritoryDetail();
 }
 document.getElementById("territory-zip-list").addEventListener("click", (e) => {
   const button = e.target.closest("[data-territory]");
@@ -236,6 +298,17 @@ document.getElementById("territory-zip-list").addEventListener("click", (e) => {
 });
 document.getElementById("map-metric").addEventListener("change", () => {
   if (territoryLayer) territoryLayer.setStyle(territoryStyle);
+  document.getElementById("map-legend-text").textContent =
+    "Lower → Higher " +
+    {
+      revenue: "sales",
+      outstanding: "balances",
+      customers: "customer count",
+      prospects: "prospect count",
+    }[document.getElementById("map-metric").value];
+  selectedTerritoryCustomer = null;
+  attentionOpen = false;
+  renderTerritoryDetail();
   updateMapLabels();
 });
 document.getElementById("map-fit").addEventListener("click", fitTerritories);
