@@ -1098,6 +1098,16 @@ function renderDataTab(d) {
         )
       : chk(true, "No Zoho names are waiting for a decision."),
   );
+  const provisional = d.mappingAll.filter((m) =>
+    /provisional owner decision/i.test(m.notes || ""),
+  );
+  for (const mapping of provisional)
+    L.push(
+      chk(
+        false,
+        `<b>${esc(mapping.zoho_name)}</b> is provisionally grouped under ${esc(mapping.mapped_store)}. Review future reports that still use this generic name.`,
+      ),
+    );
   const bad = d.batches.filter(
     (b) =>
       b.reconciliation !== "pass" ||

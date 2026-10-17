@@ -58,3 +58,7 @@ The map uses bundled NYC ZCTA geometry and Leaflet 1.9.4, with no third-party ba
 **Then: field operations.** Add customer contact/address editing with audit history, route-day planning, visit notes, photo attachments, delivery checklists and online payment shortcuts. A phone home-screen app is feasible. Offline writes need an explicit queue, unique operation IDs and conflict resolution before money-related updates can be safe.
 
 **Presentation readiness.** Add a reconciled monthly owner/bank pack with date coverage, sales basis, gross margin, cash collected, receivables aging, customer concentration and source traceability. Styling improves presentation; reconciled data and documented definitions make the numbers defensible.
+
+## Current handoff
+
+Owner login and live-data browser checks completed. Sixteen automated checks passed. Supabase hardening is applied. The frontend is prepared on `codex/antari-owner-workspace` for review and deployment. Sherdor was provisionally grouped under Sherdor Restaurant by owner instruction; Amira remains unresolved. Provisional aliases are visibly flagged for future review.
