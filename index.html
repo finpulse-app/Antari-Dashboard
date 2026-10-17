@@ -1,318 +1,598 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Antari — Distributor Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<style>
-  :root {
-    --red: #D64541;
-    --blue: #1B3A7A;
-    --gold: #B8791E;
-    --cream: #FFF8EE;
-    --dark: #2B2118;
-    --line: #D9CBB2;
-    --muted: #7A6F60;
-    --card-bg: #FFFFFF;
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --cream: #1C1712;
-      --dark: #F3ECE0;
-      --line: #3A3226;
-      --muted: #B7A992;
-      --card-bg: #24201A;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-  body {
-    margin: 0;
-    background: var(--cream);
-    color: var(--dark);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .flag-stripe { height: 6px; display: flex; }
-  .flag-stripe div { flex: 1; }
-  .flag-stripe .r { background: var(--red); }
-  .flag-stripe .b { background: var(--blue); }
-  .flag-stripe .o { background: var(--gold); }
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#172623" />
+    <meta
+      name="description"
+      content="Antari owner workspace for distribution sales, customers, and collections."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://hzufqpoauamlhkaoaacx.supabase.co; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Antari: Owner Workspace</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="assets/css/components.css" />
+    <link rel="stylesheet" href="assets/css/workspace.css" />
+    <script src="vendor/supabase.js" defer></script>
+    <script src="vendor/leaflet/leaflet.js" defer></script>
+    <script src="assets/js/core.js" defer></script>
+    <script src="assets/js/analytics.js" defer></script>
+    <script src="assets/js/screens.js" defer></script>
+    <script src="assets/js/parsers.js" defer></script>
+    <script src="assets/js/imports.js" defer></script>
+    <script src="assets/js/app.js" defer></script>
+    <script src="assets/js/territories.js" defer></script>
+    <script src="assets/js/workspace.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview"
+        >ANTARI<span>A TASTE OF ARMENIA</span></a
+      >
+      <div class="workspace-label">
+        <span class="workspace-icon">A</span>
+        <div>Distributor workspace<small>New York · Owners</small></div>
+      </div>
+      <p class="nav-label">WORKSPACE</p>
+      <nav aria-label="Main navigation">
+        <button class="tab active" data-tab="overview" aria-current="page">
+          <span aria-hidden="true">▦</span>Overview</button
+        ><button class="tab" data-tab="stores" aria-current="false">
+          <span aria-hidden="true">◉</span>Customers</button
+        ><button class="tab" data-tab="products" aria-current="false">
+          <span aria-hidden="true">◇</span>Products</button
+        ><button class="tab" data-tab="receivables" aria-current="false">
+          <span aria-hidden="true">↙</span>Receivables</button
+        ><button class="tab" data-tab="trends" aria-current="false">
+          <span aria-hidden="true">⌁</span>Performance</button
+        ><button class="tab" data-tab="routes" aria-current="false">
+          <span aria-hidden="true">⇄</span>Delivery routes</button
+        ><button class="tab" data-tab="zips" aria-current="false">
+          <span aria-hidden="true">◎</span>Territories</button
+        ><button class="tab" data-tab="data" aria-current="false">
+          <span aria-hidden="true">≡</span>Data quality</button
+        ><button class="tab" data-tab="upload" aria-current="false">
+          <span aria-hidden="true">↥</span>Import reports
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="owner-avatar">A</span>
+        <div>Antari NYC<small>Owner access</small></div>
+      </div>
+    </aside>
+    <div class="sidebar-scrim" id="sidebar-scrim"></div>
+    <div class="topbar">
+      <button
+        id="menu-toggle"
+        class="icon-button"
+        aria-label="Toggle navigation"
+        aria-expanded="false"
+      >
+        ☰
+      </button>
+      <div class="breadcrumb">
+        Antari <span>/</span> <b id="breadcrumb-view">Overview</b>
+      </div>
+      <div class="searchbar">
+        <input
+          id="global-search"
+          type="search"
+          autocomplete="off"
+          placeholder="Search customers, products, SKUs, invoices, payments, dates, imports…"
+        />
+        <div id="search-results"></div>
+      </div>
+      <button
+        id="refresh-data"
+        class="icon-button"
+        aria-label="Refresh data"
+        title="Refresh data"
+      >
+        ↻</button
+      ><span class="sync-status" id="sync-status">Owner access</span>
+      <div class="auth-badge" id="auth-badge"></div>
+    </div>
+    <main class="wrap" id="main-content">
+      <div id="auth-gate">
+        <div class="auth-story">
+          <span class="eyebrow">ANTARI · NEW YORK</span>
+          <h1>Antari,<br />at a glance.</h1>
+          <p>Your sales and customer activity in one place.</p>
+          <span class="story-line"></span><small>A TASTE OF ARMENIA</small>
+        </div>
+        <form class="auth-box" id="auth-form">
+          <span class="eyebrow">OWNER WORKSPACE</span>
+          <h2>Welcome back.</h2>
+          <p>Sign in for a clear view of sales, customers, and collections.</p>
+          <label for="auth-email">Email address</label
+          ><input
+            type="email"
+            id="auth-email"
+            autocomplete="username"
+            placeholder="you@company.com"
+            required
+          />
+          <label for="auth-password">Password</label
+          ><input
+            type="password"
+            id="auth-password"
+            autocomplete="current-password"
+            placeholder="Enter your password"
+            required
+          />
+          <button class="btn-primary" id="sign-in" type="submit">
+            Sign in to Antari <span aria-hidden="true">↗</span>
+          </button>
+          <div class="auth-msg" id="auth-msg" role="status"></div>
+          <small>Access is reserved for Antari’s two owners.</small>
+        </form>
+      </div>
+      <div id="status" role="status" class="status" style="display: none">
+        Loading your numbers…
+      </div>
+      <div id="content" style="display: none">
+        <div class="page-heading">
+          <div>
+            <span class="eyebrow">ANTARI NYC</span>
+            <h1 id="page-title">Business overview</h1>
+            <p id="page-description">
+              Sales, balances, and customers in one place.
+            </p>
+          </div>
+          <div class="heading-actions">
+            <span class="period-pill">All loaded reports</span
+            ><button class="btn-solid" data-goto="upload">
+              ↥ Import reports
+            </button>
+          </div>
+        </div>
+        <div class="preview-banner" id="preview-banner" hidden>
+          <strong>Design preview with fictional figures</strong
+          ><span
+            >Every number and customer name on this page is made up for design
+            testing. This is not Antari’s financial data. All writes are
+            disabled.</span
+          >
+        </div>
+        <div id="refresh-warning" role="alert" hidden></div>
+        <div class="kpi-row">
+          <div class="kpi total">
+            <div class="val" id="kpi-total">Not available</div>
+            <div class="lbl">Reported sales</div>
+          </div>
+          <div class="kpi wholesale">
+            <div class="val" id="kpi-wholesale">Not available</div>
+            <div class="lbl">Wholesale</div>
+          </div>
+          <div class="kpi direct">
+            <div class="val" id="kpi-direct">Not available</div>
+            <div class="lbl">Direct / Festival</div>
+          </div>
+          <div class="kpi ar">
+            <div class="val" id="kpi-ar">Not available</div>
+            <div class="lbl">Outstanding (AR)</div>
+          </div>
+          <div class="kpi other">
+            <div class="val" id="kpi-other">Not available</div>
+            <div class="lbl">Other buyers</div>
+          </div>
+        </div>
 
-  .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 80px; }
+        <div class="panel active" id="panel-overview" aria-label="Overview">
+          <div class="overview-feature">
+            <div class="revenue-card">
+              <div class="card-heading">
+                <div>
+                  <span class="eyebrow">REPORTED SALES BY CHANNEL</span>
+                  <h2>Sales by source</h2>
+                </div>
+                <button class="btn-sm quiet" data-goto="trends">
+                  Explore trends ↗
+                </button>
+              </div>
+              <div id="channel-composition"></div>
+            </div>
+            <div class="action-card">
+              <span class="eyebrow">YOUR NEXT MOVE</span>
+              <h2>Needs your<br />attention</h2>
+              <div id="owner-actions"></div>
+              <span class="action-foot">REVIEW WHAT NEEDS ATTENTION</span>
+            </div>
+          </div>
+          <div class="section-heading">
+            <h2>Business at a glance</h2>
+            <span>Sales and collections, kept distinct</span>
+          </div>
+          <div class="pulse-card sec" id="ov-status"></div>
+          <div class="ov-grid">
+            <div class="pulse-card">
+              <p class="pulse-label" id="ov-top-label">Top 5 customers</p>
+              <div id="ov-top"></div>
+            </div>
+            <div class="pulse-card">
+              <p class="pulse-label" id="ov-bottom-label">Bottom 5 customers</p>
+              <div id="ov-bottom"></div>
+            </div>
+            <div class="pulse-card">
+              <p class="pulse-label">Longest since last payment</p>
+              <div id="ov-stale"></div>
+            </div>
+            <div class="pulse-card">
+              <p class="pulse-label">Owed to you</p>
+              <div id="ov-owed"></div>
+            </div>
+          </div>
+          <p class="pulse-sub" id="ov-footnote" style="margin-top: 14px"></p>
+        </div>
 
-  header { text-align: center; margin-bottom: 44px; }
-  .wordmark {
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 700;
-    font-size: clamp(32px, 6vw, 44px);
-    color: var(--red);
-    letter-spacing: 0.02em;
-    margin: 0;
-  }
-  .tagline {
-    font-family: Georgia, serif;
-    font-style: italic;
-    font-size: 14px;
-    color: var(--blue);
-    margin: 4px 0 2px;
-  }
-  .subtitle { font-size: 13px; color: var(--muted); margin: 0; }
+        <div class="panel" id="panel-zips">
+          <div class="territory-toolbar">
+            <div>
+              <span class="eyebrow">NEW YORK · DISTRIBUTION FOOTPRINT</span>
+              <h2>Where you do business</h2>
+            </div>
+            <div>
+              <label for="map-metric">Shade territories by</label
+              ><select id="map-metric">
+                <option value="revenue">Revenue</option>
+                <option value="outstanding">Outstanding balance</option>
+                <option value="customers">Customer count</option>
+              </select>
+            </div>
+          </div>
+          <div class="territory-layout">
+            <div class="territory-map-card">
+              <div
+                id="territory-map"
+                role="region"
+                aria-label="Interactive territory map"
+              ></div>
+              <div class="map-caption">
+                <span><i></i>Lower <b>→</b> Higher</span
+                ><button class="btn-sm quiet" id="map-fit">
+                  Fit our territories ↗
+                </button>
+              </div>
+            </div>
+            <div
+              id="territory-details"
+              class="territory-details"
+              aria-live="polite"
+            ></div>
+          </div>
+          <div
+            id="territory-zip-list"
+            class="zip-pills"
+            aria-label="Choose a ZIP territory"
+          ></div>
+          <p class="map-source">
+            Areas are Census ZIP Code Tabulation Areas, which approximate postal
+            ZIPs.
+            <a
+              href="https://data.cityofnewyork.us/City-Government/ZIP-Code-Tabulation-Areas/35j5-n34v"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Boundary source: NYC Open Data</a
+            >. All data below uses loaded report coverage. Unmapped ZIPs remain
+            available in the list.
+          </p>
+          <div id="zips-grid-view">
+            <h2 class="section-label">
+              Tap a zip code to see which customers (stores and restaurants) are
+              in it, ranked by revenue.
+            </h2>
+            <div class="tile-grid-xl" id="zip-tiles"></div>
+          </div>
+          <div id="zips-drilldown-view" style="display: none">
+            <div class="back-link" data-action="showZipGrid">
+              ← Back to all zips
+            </div>
+            <h2 class="section-label" id="zip-drilldown-label"></h2>
+            <div class="tile-grid" id="zip-drilldown-stores"></div>
+          </div>
+        </div>
 
-  .hero {
-    text-align: center;
-    padding: 28px 0 32px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 36px;
-  }
-  .hero-label {
-    font-size: 13px;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin: 0 0 6px;
-  }
-  .hero-number {
-    font-family: Georgia, serif;
-    font-weight: 700;
-    font-size: clamp(40px, 9vw, 64px);
-    color: var(--dark);
-    margin: 0;
-    line-height: 1;
-  }
-  .hero-split {
-    display: flex;
-    justify-content: center;
-    gap: 36px;
-    margin-top: 18px;
-    flex-wrap: wrap;
-  }
-  .hero-split .item { text-align: center; }
-  .hero-split .val { font-size: 20px; font-weight: 600; }
-  .hero-split .lbl { font-size: 12px; color: var(--muted); }
-  .hero-split .wholesale .val { color: var(--blue); }
-  .hero-split .direct .val { color: var(--gold); }
+        <div class="panel" id="panel-stores">
+          <div class="directory-card">
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">CUSTOMER DIRECTORY</span>
+                <h2>Your distribution network</h2>
+              </div>
+              <button class="btn-sm quiet" id="export-customers">
+                Export CSV ↗
+              </button>
+            </div>
+            <div class="directory-tools">
+              <label class="sr-only" for="customer-filter"
+                >Filter customers</label
+              ><input
+                id="customer-filter"
+                type="search"
+                placeholder="Find a customer, route, or ZIP…"
+              /><label class="sr-only" for="customer-sort">Sort customers</label
+              ><select id="customer-sort">
+                <option value="revenue">Revenue: high to low</option>
+                <option value="outstanding">Outstanding: high to low</option>
+                <option value="name">Name: A to Z</option>
+              </select>
+            </div>
+            <div id="customer-directory"></div>
+          </div>
+          <div id="stores-top-bottom">
+            <h2 class="section-label">Top performers</h2>
+            <div
+              class="tile-grid"
+              id="store-top-tiles"
+              style="margin-bottom: 28px"
+            ></div>
+            <h2 class="section-label">Customers to review</h2>
+            <div
+              class="tile-grid"
+              id="store-attention-tiles"
+              style="margin-bottom: 20px"
+            ></div>
+            <div
+              class="back-link"
+              data-action="toggleAllStores"
+              data-value="true"
+            >
+              Show all customers →
+            </div>
+          </div>
+          <div id="stores-all-view" style="display: none">
+            <div
+              class="back-link"
+              data-action="toggleAllStores"
+              data-value="false"
+            >
+              ← Back to top/needs attention
+            </div>
+            <div class="tile-grid" id="store-tiles"></div>
+          </div>
+        </div>
 
-  section { margin-bottom: 40px; }
-  h2 {
-    font-family: Georgia, serif;
-    font-size: 19px;
-    font-weight: 700;
-    color: var(--red);
-    margin: 0 0 4px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--line);
-  }
-  .section-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 14px; }
+        <div class="panel" id="panel-products">
+          <div id="products-top-bottom">
+            <h2 class="section-label">Best-selling products</h2>
+            <div
+              class="tile-grid"
+              id="product-top-tiles"
+              style="margin-bottom: 28px"
+            ></div>
+            <h2 class="section-label">Products with lower sales</h2>
+            <div
+              class="tile-grid"
+              id="product-bottom-tiles"
+              style="margin-bottom: 20px"
+            ></div>
+            <div
+              class="back-link"
+              data-action="toggleAllProducts"
+              data-value="true"
+            >
+              Show all products →
+            </div>
+          </div>
+          <div id="products-all-view" style="display: none">
+            <div
+              class="back-link"
+              data-action="toggleAllProducts"
+              data-value="false"
+            >
+              ← Back to top/slow movers
+            </div>
+            <table class="preview-table" style="font-size: 13px">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th class="num">Units</th>
+                  <th class="num">Revenue</th>
+                </tr>
+              </thead>
+              <tbody id="product-all-rows"></tbody>
+            </table>
+          </div>
+        </div>
 
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th {
-    text-align: left;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    font-weight: 600;
-    padding: 0 10px 8px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); }
-  tr:last-child td { border-bottom: none; }
-  .rank-1 td:first-child::before { content: "① "; }
-  .store-name { font-weight: 600; }
-  .muted-row td { color: var(--muted); }
-  .flag-red { color: var(--red); font-weight: 600; }
+        <div class="panel" id="panel-routes">
+          <div id="routes-grid-view">
+            <h2 class="section-label">
+              Tap a route to see the customers on it, for planning driving days.
+            </h2>
+            <div class="tile-grid" id="route-tiles"></div>
+          </div>
+          <div id="routes-drilldown-view" style="display: none">
+            <div class="back-link" data-action="showRouteGrid">
+              ← Back to all routes
+            </div>
+            <h2 class="section-label" id="route-drilldown-label"></h2>
+            <div class="tile-grid" id="route-drilldown-stores"></div>
+          </div>
+        </div>
 
-  .two-col { display: flex; gap: 32px; flex-wrap: wrap; }
-  .two-col > div { flex: 1; min-width: 260px; }
+        <div class="panel" id="panel-trends">
+          <div class="pulse-card sec" id="history-status"></div>
+          <div id="trend-cards"></div>
+          <div id="trend-unavailable"></div>
+          <div style="margin: 4px 0 22px">
+            <button type="button" class="btn-sm solid" id="open-report">
+              Monthly report
+            </button>
+          </div>
 
-  .callout {
-    background: var(--card-bg);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 16px 20px;
-    font-size: 13.5px;
-    color: var(--muted);
-  }
-  .callout b { color: var(--dark); }
+          <div class="trend-note" id="trend-note"></div>
+          <div class="pulse-card" style="margin-bottom: 20px">
+            <p class="pulse-label">Cash collected in the selected period</p>
+            <div style="display: flex; gap: 8px; margin: 10px 0 16px">
+              <button
+                class="range-btn"
+                data-days="30"
+                data-action="setPaymentRange"
+                data-value="30"
+              >
+                Last 30 days
+              </button>
+              <button
+                class="range-btn"
+                data-days="90"
+                data-action="setPaymentRange"
+                data-value="90"
+              >
+                Last 90 days
+              </button>
+              <button
+                class="range-btn"
+                data-days="180"
+                data-action="setPaymentRange"
+                data-value="180"
+              >
+                Last 6 months
+              </button>
+            </div>
+            <div id="range-stats"></div>
+          </div>
+          <div id="pulse-payments"></div>
+        </div>
 
-  .status {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--muted);
-    font-size: 14px;
-  }
-  footer {
-    text-align: center;
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 50px;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
-  }
+        <div class="panel" id="panel-receivables">
+          <div id="rc-owed"></div>
+          <div id="rc-movement"></div>
+          <div id="rc-log"></div>
+          <div id="rc-recent"></div>
+          <div id="rc-behavior"></div>
+        </div>
 
-  @media (max-width: 640px) {
-    .two-col { flex-direction: column; }
-    table { font-size: 12.5px; }
-  }
-</style>
-</head>
-<body>
-<div class="flag-stripe"><div class="r"></div><div class="b"></div><div class="o"></div></div>
+        <div class="panel" id="panel-data">
+          <div id="dq-warnings"></div>
+          <div id="map-unresolved"></div>
+          <div id="map-reviewed"></div>
+        </div>
 
-<div class="wrap">
-  <header>
-    <p class="wordmark">ANTARI</p>
-    <p class="tagline">A Taste of Armenia</p>
-    <p class="subtitle">Distributor Dashboard — live from Supabase</p>
-  </header>
+        <div class="panel" id="panel-upload">
+          <div
+            class="dropzone"
+            id="dropzone"
+            role="button"
+            tabindex="0"
+            aria-label="Choose PDF reports"
+          >
+            <div><b>Drop PDFs here</b> or click to browse</div>
+            <div style="font-size: 12px; margin-top: 6px">
+              Sales by Customer, Sales by Item, Customer Balance Summary,
+              Payments Received, or a Square Sales Report: drop several at once.
+              Each one is checked against its own total and against what's
+              already loaded before anything is saved.
+            </div>
+            <input
+              aria-label="PDF reports"
+              type="file"
+              id="file-input"
+              accept="application/pdf"
+              multiple
+            />
+          </div>
+          <div id="upload-results"></div>
+          <div id="import-history"></div>
+        </div>
+      </div>
 
-  <div id="status" class="status">Loading your numbers…</div>
-  <div id="content" style="display:none;">
+      <footer>
+        <span>ANTARI <i>·</i> A Taste of Armenia</span
+        ><span>Owner workspace · New York</span>
+      </footer>
+    </main>
 
-    <div class="hero">
-      <p class="hero-label">Total Revenue</p>
-      <p class="hero-number" id="hero-total">—</p>
-      <div class="hero-split">
-        <div class="item wholesale"><div class="val" id="hero-wholesale">—</div><div class="lbl">Wholesale</div></div>
-        <div class="item direct"><div class="val" id="hero-direct">—</div><div class="lbl">Direct / Festival</div></div>
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-name"
+        tabindex="-1"
+      >
+        <div class="modal-rank" id="modal-rank"></div>
+        <h3 id="modal-name"></h3>
+        <div class="modal-row" id="row-revenue">
+          <span class="k">Revenue</span
+          ><span class="v" id="modal-revenue"></span>
+        </div>
+        <div class="modal-row" id="row-invoices">
+          <span class="k">Invoices</span
+          ><span class="v" id="modal-invoices"></span>
+        </div>
+        <div class="modal-row" id="row-payment">
+          <span class="k">Last Payment</span
+          ><span class="v" id="modal-payment"></span>
+        </div>
+        <div class="modal-row" id="modal-ar-row" style="display: none">
+          <span class="k">Outstanding Balance</span
+          ><span class="v"
+            ><span class="red-text" id="modal-ar"></span
+            ><button type="button" class="paid-btn" id="modal-paid-btn">
+              Paid
+            </button></span
+          >
+        </div>
+        <div class="modal-row" id="row-avgorder">
+          <span class="k">Avg Order Value</span
+          ><span class="v" id="modal-avgorder"></span>
+        </div>
+        <div class="modal-row" id="row-share">
+          <span class="k">Share of store &amp; restaurant revenue</span
+          ><span class="v" id="modal-share"></span>
+        </div>
+        <div class="modal-row" id="row-cadence">
+          <span class="k">Avg Days Between Payments</span
+          ><span class="v" id="modal-cadence"></span>
+        </div>
+        <div class="modal-row" id="row-population" style="display: none">
+          <span class="k">Population</span
+          ><span class="v" id="modal-population"></span>
+        </div>
+        <div class="modal-row" id="row-majority" style="display: none">
+          <span class="k">Majority Group</span
+          ><span class="v" id="modal-majority"></span>
+        </div>
+        <div
+          class="modal-row"
+          id="row-notes"
+          style="display: none; flex-direction: column; gap: 4px"
+        >
+          <span class="k">Notes</span
+          ><span
+            class="v"
+            id="modal-notes"
+            style="font-weight: 400; text-align: left"
+          ></span>
+        </div>
+        <div id="modal-history"></div>
+        <button class="modal-close" data-action="closeModal">Close</button>
       </div>
     </div>
 
-    <section>
-      <h2>Store Ranking</h2>
-      <p class="section-note">Wholesale revenue by store, ranked highest to lowest. Last payment date shows how recently each store has paid.</p>
-      <table>
-        <thead><tr><th>Store</th><th class="num">Revenue</th><th class="num">Invoices</th><th>Last Payment</th></tr></thead>
-        <tbody id="store-ranking-body"></tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2>Product Ranking</h2>
-      <p class="section-note">Wholesale units and revenue by product.</p>
-      <table>
-        <thead><tr><th>Product</th><th class="num">Units Sold</th><th class="num">Revenue</th></tr></thead>
-        <tbody id="product-ranking-body"></tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2>Accounts Receivable</h2>
-      <p class="section-note">Who owes money right now — only outstanding balances are listed.</p>
-      <table>
-        <thead><tr><th>Store</th><th class="num">Outstanding</th></tr></thead>
-        <tbody id="ar-body"></tbody>
-      </table>
-    </section>
-
-    <section class="two-col">
-      <div>
-        <h2>Zip Code Ranking</h2>
-        <table>
-          <thead><tr><th>Zip</th><th class="num">Revenue</th></tr></thead>
-          <tbody id="zip-body"></tbody>
-        </table>
-      </div>
-      <div>
-        <h2>Delivery Routes</h2>
-        <table>
-          <thead><tr><th>Route</th><th class="num">Stores</th><th class="num">Revenue</th></tr></thead>
-          <tbody id="route-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <div class="callout" id="other-callout"></div>
-    </section>
-  </div>
-
-  <footer>Antari NYC · data refreshes on page load</footer>
-</div>
-
-<script>
-  const SUPABASE_URL = "https://hzufqpoauamlhkaoaacx.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_1Rw5PxX0FCzqFwe4Qi-H-Q_xKystG52";
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  const fmt = n => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No payments yet";
-
-  async function load() {
-    try {
-      const [storeRank, prodRank, ar, zip, route, channel, other] = await Promise.all([
-        sb.from("v_store_ranking").select("*").order("revenue_rank"),
-        sb.from("v_product_ranking").select("*").order("revenue_rank"),
-        sb.from("v_accounts_receivable").select("*").order("outstanding_balance", { ascending: false }),
-        sb.from("v_zip_ranking").select("*").order("revenue_rank"),
-        sb.from("v_route_summary").select("*"),
-        sb.from("v_channel_summary").select("*"),
-        sb.from("v_other_bucket").select("*"),
-      ]);
-
-      for (const r of [storeRank, prodRank, ar, zip, route, channel, other]) {
-        if (r.error) throw r.error;
-      }
-
-      // Hero
-      const wholesale = channel.data.find(c => c.channel === "Wholesale")?.net_revenue || 0;
-      const direct = channel.data.find(c => c.channel === "Direct / Festival")?.net_revenue || 0;
-      document.getElementById("hero-total").textContent = fmt(Number(wholesale) + Number(direct));
-      document.getElementById("hero-wholesale").textContent = fmt(wholesale);
-      document.getElementById("hero-direct").textContent = fmt(direct);
-
-      // Store ranking
-      const storeBody = document.getElementById("store-ranking-body");
-      storeBody.innerHTML = storeRank.data.map(s => `
-        <tr class="${Number(s.total_revenue) === 0 ? 'muted-row' : ''}">
-          <td class="store-name">${s.store_name}</td>
-          <td class="num">${fmt(s.total_revenue)}</td>
-          <td class="num">${s.invoices}</td>
-          <td>${fmtDate(s.last_payment_date)}</td>
-        </tr>`).join("");
-
-      // Product ranking
-      const prodBody = document.getElementById("product-ranking-body");
-      prodBody.innerHTML = prodRank.data.map(p => `
-        <tr>
-          <td>${p.item_name}</td>
-          <td class="num">${Number(p.units_sold).toLocaleString()}</td>
-          <td class="num">${fmt(p.total_revenue)}</td>
-        </tr>`).join("");
-
-      // AR
-      const arBody = document.getElementById("ar-body");
-      arBody.innerHTML = ar.data.length
-        ? ar.data.map(a => `<tr><td class="store-name">${a.store_name}</td><td class="num flag-red">${fmt(a.outstanding_balance)}</td></tr>`).join("")
-        : `<tr><td colspan="2" class="muted-row">Nothing outstanding right now.</td></tr>`;
-
-      // Zip
-      document.getElementById("zip-body").innerHTML = zip.data.map(z => `
-        <tr><td>${z.zip}</td><td class="num">${fmt(z.total_revenue)}</td></tr>`).join("");
-
-      // Route
-      document.getElementById("route-body").innerHTML = route.data.map(r => `
-        <tr><td>${r.delivery_route}</td><td class="num">${r.stores_on_route}</td><td class="num">${fmt(r.total_revenue)}</td></tr>`).join("");
-
-      // Other callout
-      const o = other.data[0] || { total_revenue: 0, invoices: 0 };
-      document.getElementById("other-callout").innerHTML =
-        `<b>${fmt(o.total_revenue)}</b> across <b>${o.invoices} invoices</b> is currently unmatched to a real store (personal names, one-off labels, ambiguous entries). Clean up the <b>Name Mapping</b> table in Supabase to recover this into real store rankings.`;
-
-      document.getElementById("status").style.display = "none";
-      document.getElementById("content").style.display = "block";
-    } catch (err) {
-      document.getElementById("status").innerHTML =
-        "Couldn't load data: " + (err.message || "unknown error") + ". Check your Supabase connection.";
-      console.error(err);
-    }
-  }
-
-  load();
-</script>
-</body>
+    <div class="modal-backdrop" id="gm-backdrop">
+      <div
+        class="modal"
+        id="gm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Details"
+        tabindex="-1"
+      ></div>
+    </div>
+    <div id="toast" role="status">
+      <span id="toast-msg"></span
+      ><button type="button" id="toast-undo" style="display: none">Undo</button>
+    </div>
+  </body>
 </html>

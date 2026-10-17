@@ -1,0 +1,4 @@
+node_modules/
+dist/
+assets/nyc-zcta.geojson
+pnpm-lock.yaml
