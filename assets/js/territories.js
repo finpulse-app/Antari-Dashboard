@@ -7,6 +7,7 @@ let territoryMap,
   territoryDataset;
 const territoryGroups = new Map();
 const territoryLabelMarkers = new Map();
+const contextLabelMarkers = [];
 function territoryStats(d) {
   const groups = new Map();
   for (const customer of d.storeData) {
@@ -59,6 +60,9 @@ async function renderTerritories(d) {
   if (!territoryGroups.has(selectedZip)) selectedZip = groups[0]?.zip || null;
   renderZipPills();
   renderTerritoryDetail();
+  const coverage = territoryCoverage(d);
+  document.getElementById("map-coverage").innerHTML =
+    `<strong>${fmt(coverage.mappedSales)} on the map</strong><p>${coverage.percent === null ? "No wholesale sales loaded." : `${coverage.percent.toFixed(1)}% of loaded wholesale sales is assigned to listed customers within the map boundaries.`}<br>${fmt(coverage.otherSales)} is grouped under Other buyers${coverage.unplacedSales ? `; ${fmt(coverage.unplacedSales)} belongs to listed customers outside mapped ZIPs` : ""}. Square sales are not assigned to ZIPs.</p><button class="btn-sm quiet" data-goto="data">Review customer matching ↗</button>`;
   if (!territoryMap) {
     territoryMap = L.map("territory-map", {
       zoomControl: true,
@@ -77,7 +81,7 @@ async function renderTerritories(d) {
       );
     // No remote basemap: geographic context comes from bundled public boundary geometry.
     territoryLabels = L.layerGroup().addTo(territoryMap);
-    territoryMap.on("zoomend", updateMapLabels);
+    territoryMap.on("zoomend moveend", updateMapLabels);
   }
   try {
     if (!boundaryData) {
@@ -89,6 +93,25 @@ async function renderTerritories(d) {
     if (territoryLayer) territoryLayer.remove();
     territoryLabels.clearLayers();
     territoryLabelMarkers.clear();
+    contextLabelMarkers.length = 0;
+    for (const place of [
+      { name: "BROOKLYN", lat: 40.672, lng: -73.956, boroughLabel: true },
+      { name: "QUEENS", lat: 40.733, lng: -73.827, boroughLabel: true },
+      ...neighborhoodContext.points,
+    ]) {
+      const marker = L.marker([place.lat, place.lng], {
+        icon: L.divIcon({
+          className:
+            "map-context-label" + (place.boroughLabel ? " borough" : ""),
+          html: `<span>${esc(place.name)}</span>`,
+          iconSize: [160, 25],
+          iconAnchor: [80, 12],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(territoryLabels);
+      contextLabelMarkers.push({ marker, boroughLabel: place.boroughLabel });
+    }
     territoryLayer = L.geoJSON(boundaryData, {
       style: territoryStyle,
       onEachFeature: (feature, layer) => {
@@ -96,7 +119,7 @@ async function renderTerritories(d) {
           group = territoryGroups.get(zip);
         if (group) {
           const tip = document.createElement("div");
-          tip.textContent = `${zip} · ${group.customers.length} customers · ${fmt(group.revenue)}`;
+          tip.textContent = `${zip} (${(neighborhoodContext.areas[zip] || []).join(", ")}) · ${group.customers.length} customers · ${fmt(group.revenue)}`;
           layer.bindTooltip(tip, { sticky: true });
           layer.on("click", () => selectTerritory(zip));
           layer.on("mouseover", () =>
@@ -205,7 +228,7 @@ function renderTerritoryDetail() {
     routes = new Set(ranked.map((s) => s.delivery_route).filter(Boolean));
   const highest = ranked[0],
     share = total > 0 ? (group.revenue / total) * 100 : 0;
-  box.innerHTML = `<span class="eyebrow">TERRITORY PROFILE</span><h2>${esc(group.zip)}</h2><p class="territory-summary">${group.customers.length} customer${group.customers.length === 1 ? "" : "s"} · ${routes.size} delivery route${routes.size === 1 ? "" : "s"}</p><div class="territory-metrics"><div><small>Wholesale revenue</small><b>${fmt(group.revenue)}</b></div><div><small>Outstanding balance</small><b class="red-text">${fmt(group.outstanding)}</b></div></div><div class="territory-insight"><span class="eyebrow">WHAT TO KNOW</span><p>${share.toFixed(1)}% of listed-customer revenue comes from this territory. ${active.length} of ${ranked.length} customers have purchases in loaded reports.${highest && Number(highest.total_revenue) > 0 ? ` ${esc(highest.store_name)} leads with ${fmt(highest.total_revenue)}.` : ""}</p></div><div class="territory-customers">${ranked.map((s) => `<button data-customer="${esc(s.store_name)}"><span>${esc(s.store_name)}<small>${esc(s.delivery_route || "Unassigned route")}</small></span><span>${fmt(s.total_revenue)}<small>${Number(s.outstanding_balance) > 0 ? `${fmt(s.outstanding_balance)} owed` : "No open balance"}</small></span></button>`).join("")}</div><button class="btn-sm quiet" data-goto="receivables">Open collections workspace ↗</button>`;
+  box.innerHTML = `<span class="eyebrow">TERRITORY PROFILE</span><h2>${esc(group.zip)}</h2><p class="nearby-areas">Nearby: ${esc((neighborhoodContext.areas[group.zip] || []).join(" / ") || "Area reference unavailable")}</p><p class="territory-summary">${group.customers.length} customer${group.customers.length === 1 ? "" : "s"} · ${routes.size} delivery route${routes.size === 1 ? "" : "s"}</p><div class="territory-metrics"><div><small>Listed-customer sales</small><b>${fmt(group.revenue)}</b></div><div><small>Outstanding balance</small><b class="red-text">${fmt(group.outstanding)}</b></div></div><div class="territory-insight"><span class="eyebrow">WHAT TO KNOW</span><p>${share.toFixed(1)}% of listed-customer revenue comes from this territory. ${active.length} of ${ranked.length} customers have purchases in loaded reports.${highest && Number(highest.total_revenue) > 0 ? ` ${esc(highest.store_name)} leads with ${fmt(highest.total_revenue)}.` : ""}</p></div><div class="territory-customers">${ranked.map((s) => `<button data-customer="${esc(s.store_name)}"><span>${esc(s.store_name)}<small>${esc(s.delivery_route || "Unassigned route")}</small></span><span>${fmt(s.total_revenue)}<small>${Number(s.outstanding_balance) > 0 ? `${fmt(s.outstanding_balance)} owed` : "No open balance"}</small></span></button>`).join("")}</div><button class="btn-sm quiet" data-goto="receivables">Open collections workspace ↗</button><p class="map-note">Nearby area names are context from NYC neighborhood statistics, not exact ZIP boundaries. <a href="https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd" target="_blank" rel="noopener noreferrer">Neighborhood source</a>. Figures cover listed customers in this ZIP, not all Antari sales.</p>`;
 }
 document.getElementById("territory-zip-list").addEventListener("click", (e) => {
   const button = e.target.closest("[data-territory]");
@@ -219,6 +242,29 @@ document.getElementById("map-fit").addEventListener("click", fitTerritories);
 
 function updateMapLabels() {
   if (!territoryMap) return;
+  const occupied = [];
+  for (const [zip, marker] of territoryLabelMarkers)
+    if (territoryMap.getZoom() >= 12.2 || zip === selectedZip) {
+      const point = territoryMap.latLngToContainerPoint(marker.getLatLng());
+      occupied.push({ x: point.x, y: point.y, w: 70, h: 34 });
+    }
+  for (const item of contextLabelMarkers) {
+    const el = item.marker.getElement();
+    if (!el) continue;
+    const point = territoryMap.latLngToContainerPoint(item.marker.getLatLng());
+    const zoom = territoryMap.getZoom();
+    const show =
+      (item.boroughLabel ? zoom < 12.2 : zoom >= 11.6) &&
+      territoryMap.getBounds().contains(item.marker.getLatLng()) &&
+      !occupied.some(
+        (p) =>
+          Math.abs(p.x - point.x) < (p.w + 150) / 2 &&
+          Math.abs(p.y - point.y) < (p.h + 26) / 2,
+      );
+    el.style.display = show ? "" : "none";
+    if (show) occupied.push({ x: point.x, y: point.y, w: 150, h: 26 });
+  }
+
   for (const [zip, marker] of territoryLabelMarkers) {
     const element = marker.getElement();
     if (element)
@@ -232,6 +278,8 @@ function clearTerritories() {
   selectedZip = null;
   territoryGroups.clear();
   territoryLabelMarkers.clear();
+  contextLabelMarkers.length = 0;
+  document.getElementById("map-coverage").replaceChildren();
   territoryMap?.remove();
   territoryMap = null;
   territoryLayer = null;

@@ -1661,6 +1661,8 @@ function clearWorkspace() {
     .querySelectorAll(".kpi .val")
     .forEach((el) => (el.textContent = "Not available"));
   for (const id of [
+    "daily-priorities",
+    "briefing-basis",
     "channel-composition",
     "owner-actions",
     "customer-directory",
