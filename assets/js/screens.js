@@ -1214,7 +1214,10 @@ async function saveMapping(rows) {
         ),
     )
   )
-    return "Disable this name’s provisional sales split above before changing its customer mapping.";
+    return {
+      message:
+        "Disable this name’s provisional sales split above before changing its customer mapping.",
+    };
   const { error } = await sb
     .from("name_mapping")
     .upsert(rows, { onConflict: "zoho_name" });

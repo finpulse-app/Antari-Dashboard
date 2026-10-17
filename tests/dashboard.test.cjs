@@ -846,7 +846,7 @@ test("an active split cannot be silently overwritten by an ordinary name mapping
     const message = await app.run(
       'saveMapping([{zoho_name:D.mappedRows[0].zoho_name,mapped_store:"Other"}])',
     );
-    assert.match(message, /Disable.*provisional sales split/);
+    assert.match(message.message, /Disable.*provisional sales split/);
   } finally {
     app.dom.window.close();
   }
