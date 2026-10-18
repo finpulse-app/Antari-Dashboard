@@ -90,6 +90,7 @@ function gmOpen(html, wide) {
   const m = document.getElementById("gm-modal");
   m.className = "modal" + (wide ? " wide" : "");
   m.innerHTML = html;
+  m.scrollTop = 0;
   document.getElementById("gm-backdrop").classList.add("open");
 }
 function gmClose() {

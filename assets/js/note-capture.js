@@ -138,6 +138,9 @@ function interpretVisitNote(text, stores = []) {
   const iso = note.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
   if (
     iso &&
+    !/\b(?:follow[ -]?up|call(?: back)?|check back|visit again)\b[^.;\n]{0,45}$/i.test(
+      note.slice(0, iso.index),
+    ) &&
     !Number.isNaN(Date.parse(iso[1] + "T00:00:00Z")) &&
     new Date(iso[1] + "T00:00:00Z").toISOString().slice(0, 10) === iso[1]
   )
@@ -253,6 +256,11 @@ function installVisitCapture() {
       v.quantity !== null ||
       v.unit_price !== null ||
       v.discount_pct !== null;
+    const detected = interpretVisitNote(note.value, D?.stores || []);
+    if (detected.customer && store.value !== detected.customer)
+      throw new Error(
+        "The customer mentioned in your note differs from the selected customer. Choose the correct customer or edit the note.",
+      );
     if (!hasAny) return {};
     if (
       !v.product ||
@@ -277,11 +285,6 @@ function installVisitCapture() {
         v.unit_price >= 1e9)
     )
       throw new Error("Enter a valid nonnegative unit price.");
-    const detected = interpretVisitNote(note.value, D?.stores || []);
-    if (detected.customer && store.value !== detected.customer)
-      throw new Error(
-        "The customer mentioned in your note differs from the selected customer. Choose the correct customer or edit the note.",
-      );
     return { activity_kind: "sale_draft", ...v };
   };
 }

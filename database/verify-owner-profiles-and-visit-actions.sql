@@ -1,0 +1,50 @@
+begin;
+do $$ begin
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',(select user_id::text from public.owner_access order by granted_at limit 1),'role','authenticated','email','profile-test@example.invalid')::text,true);
+ perform set_config('antari.second_owner',(select user_id::text from public.owner_access order by granted_at offset 1 limit 1),true);
+end $$;
+set local role authenticated;
+do $$ declare s text; p public.customer_profiles; new_id uuid; n integer; note_id uuid:=gen_random_uuid(); before_total numeric; crm jsonb; begin
+ select store_name into s from public.stores where store_name<>'Other' order by store_name limit 1;
+ select * into p from public.customer_profiles where store_name=s;
+ if p.id is null then raise exception 'FAIL: existing location lacks identity';end if;
+ select sum(net_revenue) into before_total from public.v_channel_summary;
+ new_id:=public.save_customer_profile(s,p.revision,jsonb_build_object('zip','11235','category','Market','contact_name','Rollback test contact','address','Rollback test address','address_confirmed',true));
+ if new_id<>p.id or (select revision from public.customer_profiles where id=p.id)<>p.revision+1 then raise exception 'FAIL: profile identity or revision';end if;
+ if (select updated_by from public.customer_profiles where id=p.id)<>auth.uid() then raise exception 'FAIL: profile author';end if;
+ begin perform public.save_customer_profile(s,p.revision,'{"zip":"11235"}');raise exception 'FAIL: stale profile overwrite';exception when raise_exception then if sqlerrm like 'FAIL:%' then raise;end if;end;
+ begin update public.customer_profiles set id=gen_random_uuid() where id=p.id;raise exception 'FAIL: identity changed';exception when raise_exception then if sqlerrm like 'FAIL:%' then raise;end if;end;
+ begin perform public.save_customer_profile(s,p.revision+1,'{"zip":"11235","zoho_contact_id":"test-without-org"}');raise exception 'FAIL: contact lacks organization';exception when check_violation then null;end;
+ crm:=jsonb_build_object('interest','Example product','samples_delivered',true,'offer_pct',10,'offer_reason','First purchase','followup_on',current_date+3,'followup_title','Rollback test follow-up');
+ perform public.save_visit_capture(note_id,s,'Rollback test visit','{}',crm);
+ perform public.save_visit_capture(note_id,s,'Rollback test visit','{}',crm);
+ if (select count(*) from public.customer_visit_notes where id=note_id)<>1 or (select count(*) from public.customer_followups where id=note_id)<>1 then raise exception 'FAIL: retry duplicated or omitted an action';end if;
+ begin perform public.save_visit_capture(note_id,s,'Changed retry','{}',crm);raise exception 'FAIL: changed retry accepted';exception when raise_exception then if sqlerrm like 'FAIL:%' then raise;end if;end;
+ note_id:=gen_random_uuid();
+ begin perform public.save_visit_capture(note_id,s,'Invalid sale','{"activity_kind":"sale_draft","product":"Example","quantity":-1}',crm);raise exception 'FAIL: invalid sale accepted';exception when check_violation then null;end;
+ if exists(select 1 from public.customer_followups where id=note_id) or exists(select 1 from public.customer_visit_notes where id=note_id) then raise exception 'FAIL: partial save';end if;
+ insert into public.product_unit_pricing(item_name,unit_cost,wholesale_price) values('ANTARI ROLLBACK PRICING',1,2);
+ if (select sum(net_revenue) from public.v_channel_summary)<>before_total then raise exception 'FAIL: owner tools changed financial totals';end if;
+ if has_table_privilege('authenticated','public.customer_profiles','delete') or has_table_privilege('anon','public.product_unit_pricing','select') then raise exception 'FAIL: excessive grants';end if;
+ if has_column_privilege('authenticated','public.stores','store_name','update') or has_column_privilege('authenticated','public.stores','delivery_route','update') then raise exception 'FAIL: metadata edits can change identity or route';end if;
+end $$;
+reset role;
+do $$ begin perform set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('antari.second_owner'),'role','authenticated','email','co-owner-test@example.invalid')::text,true);end $$;
+set local role authenticated;
+do $$ begin if not exists(select 1 from public.product_unit_pricing where item_name='ANTARI ROLLBACK PRICING') then raise exception 'FAIL: second owner isolation';end if;end $$;
+reset role;
+select set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}',true);
+set local role authenticated;
+do $$ begin
+ if exists(select 1 from public.customer_profiles) or exists(select 1 from public.product_unit_pricing) then raise exception 'FAIL: non-owner read';end if;
+ begin perform public.save_visit_capture(gen_random_uuid(),'Unknown','Denied','{}','{}');raise exception 'FAIL: non-owner capture';exception when raise_exception then if sqlerrm like 'FAIL:%' then raise;end if;end;
+end $$;
+reset role;
+set local role anon;
+do $$ begin
+ begin perform * from public.customer_profiles;raise exception 'FAIL: anonymous profile read';exception when insufficient_privilege then null;end;
+ if has_function_privilege('anon','public.save_visit_capture(uuid,text,text,jsonb,jsonb)','execute') then raise exception 'FAIL: anonymous RPC access';end if;
+end $$;
+reset role;
+rollback;
+select 'PASS: profiles, immutable identity, stale edits, note/follow-up atomicity, retry idempotency, both owners, stranger isolation, and unchanged financial totals' as verification;

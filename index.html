@@ -22,10 +22,13 @@
     <link rel="stylesheet" href="assets/css/components.css" />
     <link rel="stylesheet" href="assets/css/workspace.css" />
     <link rel="stylesheet" href="assets/css/territory-studio.css" />
+    <link rel="stylesheet" href="assets/css/summary-report.css" />
+    <link rel="stylesheet" href="assets/css/customer-profiles.css" />
     <script src="vendor/supabase.js" defer></script>
     <script src="vendor/leaflet/leaflet.js" defer></script>
     <script src="assets/js/core.js" defer></script>
     <script src="assets/js/analytics.js" defer></script>
+    <script src="assets/js/summary-report.js" defer></script>
     <script src="assets/js/business-types.js" defer></script>
     <script src="assets/js/allocations.js" defer></script>
     <script src="assets/js/screens.js" defer></script>
@@ -35,8 +38,10 @@
     <script src="assets/js/neighborhoods.js" defer></script>
     <script src="assets/js/territories.js" defer></script>
     <script src="assets/js/note-capture.js" defer></script>
+    <script src="assets/js/note-actions.js" defer></script>
     <script src="assets/js/fieldwork.js" defer></script>
     <script src="assets/js/territory-studio.js" defer></script>
+    <script src="assets/js/customer-profiles.js" defer></script>
     <script src="assets/js/workspace.js" defer></script>
   </head>
   <body>
@@ -162,6 +167,9 @@
             </p>
           </div>
           <div class="heading-actions">
+            <button class="btn-ghost" data-summary-report>
+              Summary report
+            </button>
             <span class="period-pill">All loaded reports</span
             ><button class="btn-solid" data-goto="upload">
               ↥ Import reports
@@ -668,6 +676,12 @@
         </div>
 
         <div class="panel" id="panel-products">
+          <div class="pricing-entry">
+            <p>Review product performance and current unit economics.</p>
+            <button class="btn-sm" data-unit-pricing>
+              Reference unit pricing ↗
+            </button>
+          </div>
           <div id="products-top-bottom">
             <h2 class="section-label">Best-selling products</h2>
             <div
@@ -732,7 +746,7 @@
           <div id="trend-unavailable"></div>
           <div style="margin: 4px 0 22px">
             <button type="button" class="btn-sm solid" id="open-report">
-              Monthly report
+              Summary report
             </button>
           </div>
 

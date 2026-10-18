@@ -163,6 +163,7 @@ function openVisitNotes(selected = "") {
     .addEventListener("change", renderVisitHistory);
   renderVisitHistory();
   installVisitCapture();
+  installVisitActions();
   document.getElementById("visit-save").addEventListener("click", async () => {
     const store = document.getElementById("visit-store").value,
       note = document.getElementById("visit-note").value.trim(),
@@ -178,13 +179,23 @@ function openVisitNotes(selected = "") {
     try {
       const capture =
         document.getElementById("note-sale-fields")?.getCapture?.() || {};
-      const result = await sb
-        .from("customer_visit_notes")
-        .insert({ id: visitId, store_name: store, note, ...capture });
+      const crm =
+        document.getElementById("note-action-fields")?.getCapture?.() || {};
+      const result = await sb.rpc("save_visit_capture", {
+        p_id: visitId,
+        p_store: store,
+        p_note: note,
+        p_sale: capture,
+        p_crm: crm,
+      });
       if (result.error) throw result.error;
       if (epoch !== authEpoch) return;
       if (button.isConnected) gmClose();
-      showToast("Visit note saved for both owners.");
+      showToast(
+        crm.followup_on
+          ? "Visit note and follow-up saved for both owners."
+          : "Visit note saved for both owners.",
+      );
       await reloadAfterWrite();
     } catch (err) {
       if (epoch === authEpoch && error.isConnected) {
@@ -202,7 +213,7 @@ function renderVisitHistory() {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 8);
   document.getElementById("visit-history").innerHTML = name
-    ? `<h4>Recent notes</h4>${notes.map((n) => `<article class="visit-entry"><small>${esc(n.recorded_by_email || "Owner")} · ${esc(new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</small><p>${esc(n.note)}</p>${saleNoteSummary(n)}</article>`).join("") || '<p class="empty-note">No visit notes for this customer yet.</p>'}`
+    ? `<h4>Recent notes</h4>${notes.map((n) => `<article class="visit-entry"><small>${esc(n.recorded_by_email || "Owner")} · ${esc(new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</small><p>${esc(n.note)}</p>${saleNoteSummary(n)}${visitActionsHtml(n)}</article>`).join("") || '<p class="empty-note">No visit notes for this customer yet.</p>'}`
     : "";
 }
 document.addEventListener("click", (e) => {
