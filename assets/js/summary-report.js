@@ -368,6 +368,21 @@ function buildSummaryReport(d, period = 3, endMonth) {
     "Establish profitability inputs",
     "Current reference unit costs can support pricing decisions. Historical costs, discounts, freight, returns, and operating expenses are needed before reporting business profit.",
   );
+  for (const [title, detail] of [
+    [
+      "Add dated orders for reorder timing",
+      "Customer summary periods do not reveal individual order dates. Payment dates describe collections and should not be used as reorder dates.",
+    ],
+    [
+      "Add invoice due dates for overdue aging",
+      "Outstanding balances do not establish that an invoice is late. Due dates and invoice-level payment matching are needed for an overdue breakdown.",
+    ],
+    [
+      "Connect product sales to customer locations",
+      "The loaded item reports show product totals without identifying which store bought each product. Invoice line items are needed for product mix by customer or ZIP.",
+    ],
+  ])
+    if (notes.length < 5) add(notes, title, detail);
   const metrics = [
     {
       label: "Reported sales",

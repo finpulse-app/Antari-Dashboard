@@ -1016,7 +1016,7 @@ test("summary periods use complete calendar windows and include all business typ
     assert.equal(r.comparable, false);
     assert.equal(r.changePct, null);
     assert.ok(r.strengths.length <= 5);
-    assert.ok(r.notes.length <= 5);
+    assert.equal(r.notes.length, 5);
     assert.doesNotMatch(
       r.assessment,
       /profit(?:ability)? (?:rose|increased|improved)/i,
