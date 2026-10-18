@@ -394,7 +394,7 @@
     background: white !important;
     overflow: visible !important;
   }
-  #gm-backdrop:has(.summary-dialog) {
+  #gm-backdrop.open:has(.summary-dialog) {
     display: block !important;
     position: static !important;
     padding: 0 !important;
