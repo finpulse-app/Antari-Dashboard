@@ -206,12 +206,13 @@ function buildSummaryReport(d, period = 3, endMonth) {
   let headline = "A clearer baseline",
     assessment;
   if (comparable) {
+    const subject = compareCombined ? "Sales" : "Wholesale sales";
     headline =
       change > 0
-        ? "Sales are growing"
+        ? `${subject} are growing`
         : change < 0
-          ? "Sales need attention"
-          : "Sales are holding steady";
+          ? `${subject} need attention`
+          : `${subject} are holding steady`;
     assessment = `${changeScope} ${change > 0 ? "increased" : change < 0 ? "decreased" : "were unchanged"}${changePct !== null ? ` ${Math.abs(changePct).toFixed(1)}%` : ""} compared with the ${comparisonLabel}, moving from ${fmt(previousValue)} to ${fmt(currentValue)}. `;
     if (change > 0)
       add(
@@ -422,6 +423,28 @@ function buildSummaryReport(d, period = 3, endMonth) {
       detail: current.snapshot
         ? `As of ${fmtDate(current.snapshot)}; not an overdue measure`
         : "No historical snapshot available",
+    },
+    {
+      label: "Customer concentration",
+      value:
+        current.concentration === null
+          ? "Not available"
+          : `${current.concentration.toFixed(1)}%`,
+      detail: current.estimated
+        ? "Largest listed customer share; includes estimates"
+        : "Largest listed customer share of listed wholesale sales",
+    },
+    {
+      label: "Reported product units",
+      value: current.products.known
+        ? sumOf(
+            current.products.rows,
+            (row) => row.quantity_sold,
+          ).toLocaleString()
+        : "Not available",
+      detail: current.products.known
+        ? `${soldProducts.length} products with sales in included wholesale item reports`
+        : "Whole product reports inside the selection are required",
     },
   ];
   return {

@@ -145,7 +145,7 @@
 }
 .summary-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid #dde1d3;
   border-radius: 8px;
   overflow: hidden;
@@ -155,10 +155,10 @@
   border-right: 1px solid #dde1d3;
   border-bottom: 1px solid #dde1d3;
 }
-.summary-kpis section:nth-child(3n) {
+.summary-kpis section:nth-child(4n) {
   border-right: 0;
 }
-.summary-kpis section:nth-last-child(-n + 3) {
+.summary-kpis section:nth-last-child(-n + 4) {
   border-bottom: 0;
 }
 .summary-kpis span {
@@ -436,7 +436,7 @@
     line-height: 1.65;
   }
   .summary-kpis {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     break-inside: avoid;
   }
   .summary-kpis section {
