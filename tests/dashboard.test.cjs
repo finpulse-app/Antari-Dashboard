@@ -32,6 +32,7 @@ function makeApp({ preview = true, transform } = {}) {
   for (const name of [
     "core",
     "analytics",
+    "summary-report",
     "business-types",
     "allocations",
     "screens",
@@ -41,8 +42,10 @@ function makeApp({ preview = true, transform } = {}) {
     "neighborhoods",
     "territories",
     "note-capture",
+    "note-actions",
     "fieldwork",
     "territory-studio",
+    "customer-profiles",
     "workspace",
   ]) {
     vm.runInContext(readFileSync(root + `assets/js/${name}.js`, "utf8"), ctx, {
@@ -995,6 +998,271 @@ test("a ZIP hidden by a business filter explains the missing locations and can c
       "",
     );
     assert.equal(app.run("D.wholesale+D.direct"), total);
+  } finally {
+    app.dom.window.close();
+  }
+});
+
+test("summary periods use complete calendar windows and include all business types", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run("activeBusinessType='restaurant'");
+    const r = app.run("buildSummaryReport(D,3,'2026-08')");
+    assert.equal(r.start, "2026-06-01");
+    assert.equal(r.end, "2026-08-31");
+    assert.equal(r.current.full, true);
+    assert.equal(r.current.total, app.run("D.wholesale+D.direct"));
+    assert.equal(r.comparable, false);
+    assert.equal(r.changePct, null);
+    assert.ok(r.strengths.length <= 5);
+    assert.ok(r.notes.length <= 5);
+    assert.doesNotMatch(
+      r.assessment,
+      /profit(?:ability)? (?:rose|increased|improved)/i,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("a multi-month report crossing a window is excluded instead of prorated and allocated invoices are counted once", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(`D.mappedRows=[1,2,3].map(n=>({id:99,zoho_name:'Generic customer',mapped_store:'Location '+n,sales:100,invoice_count:null,source_invoice_count:2,is_allocated:true,period_start:'2026-07-24',period_end:'2026-09-30'}));
+      D.festRows=[{id:1,sales:50,period_start:'2026-07-01',period_end:'2026-09-23'}]; D.batches=[];`);
+    const one = app.run("buildSummaryReport(D,1,'2026-09')");
+    assert.equal(one.current.total, null);
+    assert.equal(one.current.wholesale.crossing.length, 1);
+    assert.equal(one.changePct, null);
+    const three = app.run("buildSummaryReport(D,3,'2026-09')");
+    assert.equal(three.current.total, 350);
+    assert.equal(three.current.invoices, 2);
+    assert.equal(three.current.estimated, true);
+    assert.equal(three.current.full, false);
+    assert.match(three.assessment, /provisional/);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("year-over-year growth requires matching covered periods and missing months are never zero-filled", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      `D.batches=[];D.mappedRows=[];D.festRows=[];for(let i=0;i<24;i++){const m=addMonths('2024-01',i),period_start=m+'-01',period_end=reportMonthEnd(m);D.mappedRows.push({id:i,mapped_store:'Example',sales:i<12?100:200,invoice_count:2,period_start,period_end});D.festRows.push({id:i,sales:50,period_start,period_end});}`,
+    );
+    const r = app.run("buildSummaryReport(D,'yoy','2025-12')");
+    assert.equal(r.start, "2025-01-01");
+    assert.equal(r.previousStart, "2024-01-01");
+    assert.equal(r.comparable, true);
+    assert.equal(r.change, 1200);
+    assert.ok(Math.abs(r.changePct - 66.6666667) < 0.0001);
+    app.run(
+      "D.mappedRows=D.mappedRows.filter(r=>r.period_start!=='2024-07-01');D.festRows=D.festRows.filter(r=>r.period_start!=='2024-07-01')",
+    );
+    const gap = app.run("buildSummaryReport(D,'yoy','2025-12')");
+    assert.equal(gap.comparable, false);
+    assert.equal(gap.changePct, null);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("reports use dated snapshots and imported payments without adding field drafts or payment logs", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      `D.balances=[{as_of_date:'2026-08-20',outstanding_balance:10},{as_of_date:'2026-09-30',outstanding_balance:999}];D.payLog=[{amount:99999}];D.visitNotes=[{activity_kind:'sale_draft',quantity:999,unit_price:99}];`,
+    );
+    const r = app.run("buildSummaryReport(D,1,'2026-08')");
+    assert.equal(r.current.snapshot, "2026-08-20");
+    assert.equal(r.current.receivables, 10);
+    assert.equal(
+      r.current.collected,
+      app.run(
+        "sumOf(D.payments.filter(p=>p.payment_date.startsWith('2026-08')),(p)=>p.amount)",
+      ),
+    );
+    assert.throws(
+      () => app.run("buildSummaryReport(D,1,'2099-01')"),
+      /completed month/,
+    );
+    assert.throws(
+      () => app.run("buildSummaryReport(D,2,'2026-08')"),
+      /supported reporting period/,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("Summary report controls generate each requested period and reject future months without leaving stale report text", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run("openSummaryReport()");
+    const doc = app.dom.window.document;
+    for (const value of ["1", "3", "6", "12", "yoy"]) {
+      doc.querySelector(`[data-summary-period="${value}"]`).click();
+      assert.ok(doc.querySelector("#summary-paper h1"));
+      assert.equal(
+        doc
+          .querySelector(`[data-summary-period="${value}"]`)
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+    }
+    const end = doc.querySelector("#summary-end");
+    end.value = "2099-01";
+    end.dispatchEvent(new app.dom.window.Event("change", { bubbles: true }));
+    assert.match(
+      doc.querySelector("#summary-error").textContent,
+      /completed month/,
+    );
+    assert.equal(doc.querySelector("#summary-paper").textContent, "");
+    assert.equal(doc.querySelector("#summary-print").disabled, true);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("visit wording captures product interest, samples, an offer, and a dated follow-up without creating sales", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const r = app.run(
+      `interpretVisitActions('Delivered samples. Owner liked apricot juice, offered 10% on the first order, follow up Friday.','2026-10-17')`,
+    );
+    assert.equal(r.capture.interest, "apricot juice");
+    assert.equal(r.capture.samples_delivered, true);
+    assert.equal(r.capture.offer_pct, 10);
+    assert.equal(r.capture.followup_on, "2026-10-23");
+    assert.equal(
+      app.run(
+        `interpretVisitNote('Delivered samples. Owner liked apricot juice, offered 10% on the first order, follow up Friday.').kind`,
+      ),
+      "note",
+    );
+    assert.equal(
+      app.run(
+        `interpretVisitActions('Will follow up tomorrow.','2026-10-17').capture.followup_on`,
+      ),
+      "2026-10-18",
+    );
+    const denied = app.run(
+      `interpretVisitActions("Never delivered samples. Not interested in juice. Do not offer 10%. Don't follow up Friday.",'2026-10-17')`,
+    );
+    assert.equal(Object.keys(denied.capture).length, 0);
+    assert.equal(
+      app.run(
+        `interpretVisitNote('Sold 100 bottles of juice. Follow up on 2026-10-23.').sale_on`,
+      ),
+      null,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("visit capture saves a note and its follow-up in one idempotent RPC with unknown prices kept blank", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      `window.savedCalls=[];window.savedRpc=sb.rpc;sb.rpc=async(name,args)=>{if(name==='save_visit_capture'){window.savedCalls.push(args);return {data:args.p_id,error:null};}return window.savedRpc(name,args);};reloadAfterWrite=async()=>{};openVisitNotes('Cedar Market');`,
+    );
+    const doc = app.dom.window.document,
+      note = doc.querySelector("#visit-note");
+    note.value =
+      "Owner liked apricot juice. Offered 10% on the first order. Follow up Friday.";
+    note.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
+    assert.match(
+      doc.querySelector("#visit-action-preview").textContent,
+      /also creates one shared follow-up/,
+    );
+    doc.querySelector("#visit-save").click();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(app.run("window.savedCalls.length"), 1);
+    assert.equal(app.run("window.savedCalls[0].p_crm.offer_pct"), 10);
+    assert.equal(app.run("Object.keys(window.savedCalls[0].p_sale).length"), 0);
+    assert.equal(app.run("window.savedCalls[0].p_store"), "Cedar Market");
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("a non-sale note cannot apply captured actions to a different named customer", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(`openVisitNotes('Cedar Market')`);
+    const doc = app.dom.window.document,
+      note = doc.querySelector("#visit-note");
+    note.value = "Visited Ararat Bakery. Owner liked juice. Follow up Friday.";
+    note.dispatchEvent(new app.dom.window.Event("input", { bubbles: true }));
+    assert.throws(
+      () => app.run(`document.getElementById('note-sale-fields').getCapture()`),
+      /differs from the selected customer/,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("location profiles preserve failed edits, require a Zoho organization, and escape customer text", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(`openCustomerProfile('Cedar Market')`);
+    const doc = app.dom.window.document,
+      form = doc.querySelector("#customer-profile-form");
+    form.elements.address.value = "Example address";
+    form.elements.zoho_contact_id.value = "123";
+    form.dispatchEvent(
+      new app.dom.window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+    assert.match(
+      doc.querySelector("#profile-error").textContent,
+      /organization/,
+    );
+    form.elements.zoho_organization_id.value = "456";
+    form.dispatchEvent(
+      new app.dom.window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    assert.match(
+      doc.querySelector("#profile-error").textContent,
+      /Writes are disabled/,
+    );
+    assert.equal(form.elements.address.value, "Example address");
+    form.elements.address_confirmed.checked = true;
+    form.elements.address.dispatchEvent(
+      new app.dom.window.Event("input", { bubbles: true }),
+    );
+    assert.equal(form.elements.address_confirmed.checked, false);
+    app.run(
+      `D.customerProfiles=[{id:'example',store_name:'Cedar Market',address:'<img src=x onerror=alert(1)>',interests:'<script>bad</script>'}];document.getElementById('territory-details').innerHTML=customerProfileHtml(D.storeData.find(s=>s.store_name==='Cedar Market'),D)`,
+    );
+    assert.equal(
+      doc.querySelectorAll("#territory-details img,#territory-details script")
+        .length,
+      0,
+    );
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("reference unit pricing shows unit spread separately from historical profitability", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(
+      `D.productPricing=[{item_name:'Example product',unit_cost:2.50,wholesale_price:4,notes:'Owner supplied'}]`,
+    );
+    const html = app.run(`unitPricingHtml('Example product')`);
+    assert.match(html, /\$1.50/);
+    assert.match(html, /37.50%/);
+    assert.match(html, /Not applied retrospectively/);
+    assert.match(
+      app.run(`unitPricingHtml('Unpriced product')`),
+      /No unit cost/,
+    );
   } finally {
     app.dom.window.close();
   }

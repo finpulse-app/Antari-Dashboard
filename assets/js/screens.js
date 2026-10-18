@@ -1631,7 +1631,7 @@ function openModal(store) {
   document.getElementById("modal-paid-btn").onclick = () =>
     openPaymentModal(store.store_name);
   document.getElementById("modal-history").innerHTML =
-    customerHistoryHtml(store);
+    customerHistoryHtml(store) + customerProfileHtml(store, D);
   document.getElementById("modal-avgorder").textContent =
     store.invoices > 0
       ? fmt(store.total_revenue / store.invoices)

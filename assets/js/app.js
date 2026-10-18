@@ -18,7 +18,7 @@ document.getElementById("ov-status").addEventListener("click", (e) => {
   if (a && a.dataset.src) openMonthDetail(a.dataset.src, a.dataset.month);
 });
 document.getElementById("open-report").addEventListener("click", () => {
-  if (D) openMonthlyReport();
+  if (D) openSummaryReport();
 });
 document.getElementById("rc-owed").addEventListener("click", (e) => {
   const b = e.target.closest("[data-pay]");
@@ -137,6 +137,8 @@ async function loadDashboard(epoch) {
   try {
     // Each query is named, and results are read back BY NAME: so a reordering typo can't scramble the data again.
     const queries = {
+      customerProfiles: () => sb.from("customer_profiles").select("*"),
+      productPricing: () => sb.from("product_unit_pricing").select("*"),
       saleAllocations: () => sb.from("sales_customer_allocations").select("*"),
       prospects: () => sb.from("territory_prospects").select("*"),
       followups: () => sb.from("customer_followups").select("*"),
@@ -146,7 +148,7 @@ async function loadDashboard(epoch) {
         sb
           .from("customer_visit_notes")
           .select(
-            "id,store_name,note,created_at,recorded_by_email,activity_kind,product,quantity,quantity_unit,discount_pct,discount_reason,unit_price,sale_on",
+            "id,store_name,note,created_at,recorded_by_email,activity_kind,product,quantity,quantity_unit,discount_pct,discount_reason,unit_price,sale_on,crm_capture",
           ),
       storeRank: () =>
         sb.from("v_store_ranking").select("*").order("revenue_rank"),
@@ -189,7 +191,11 @@ async function loadDashboard(epoch) {
             "id,item_name,sku,quantity_sold,sales,period_start,period_end",
           ),
       festRows: () =>
-        sb.from("festival_sales").select("id,period_start,period_end"),
+        sb
+          .from("festival_sales")
+          .select(
+            "id,item_name,quantity_sold,sales,period_start,period_end,import_batch_id",
+          ),
       srcMonths: () => sb.from("v_source_months").select("*"),
       custMonths: () => sb.from("v_customer_months").select("*"),
       prodMonths: () => sb.from("v_product_months").select("*"),
@@ -211,6 +217,8 @@ async function loadDashboard(epoch) {
           .order("imported_at", { ascending: false }),
     };
     const orderKeys = {
+      customerProfiles: ["id"],
+      productPricing: ["id"],
       saleAllocations: ["source_sale_id", "store_name"],
       prospects: ["id"],
       followups: ["id"],
@@ -788,6 +796,7 @@ async function loadDashboard(epoch) {
         `
           <div class="modal-rank">#${p.revenue_rank} of ${sortedProducts.length} by revenue · #${unitRank} by units${skuOf ? " · SKU " + esc(skuOf) : ""}</div>
           <h3>${esc(p.item_name)}</h3>
+          ${unitPricingHtml(p.item_name)}
           <div class="modal-row"><span class="k">Units sold</span><span class="v">${units.toLocaleString()}</span></div>
           <div class="modal-row"><span class="k">Revenue</span><span class="v">${fmt(rev)}</span></div>
           <div class="modal-row"><span class="k">Avg price per unit</span><span class="v">${units > 0 ? fmt(rev / units) : "Not available"}</span></div>
@@ -1003,6 +1012,8 @@ async function loadDashboard(epoch) {
 
     // ---- v14: everything the new screens need, then draw them
     D = {
+      customerProfiles: R.customerProfiles.data,
+      productPricing: R.productPricing.data,
       saleAllocations: R.saleAllocations.data,
       prospects: R.prospects.data,
       followups: R.followups.data,
@@ -1023,6 +1034,7 @@ async function loadDashboard(epoch) {
       custMonths: custMonths.data,
       prodMonths: prodMonths.data,
       itemRows: itemRows.data,
+      festRows: festRows.data,
       sortedProducts,
       monthlyPay: monthlyPay.data,
       latestPaymentDate,

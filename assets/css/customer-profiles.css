@@ -1,0 +1,129 @@
+.customer-profile {
+  border-block: 1px solid var(--line);
+  padding: 16px 0;
+  margin: 16px 0;
+}
+.customer-profile .card-heading {
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.customer-profile .card-heading h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.customer-profile .btn-sm {
+  font-size: 10px;
+}
+.customer-profile p {
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.customer-profile small {
+  color: var(--muted);
+  font-size: 9px;
+  display: block;
+}
+.customer-profile .studio-disclosure p {
+  font-size: 10px;
+}
+.profile-identity {
+  font-family: monospace;
+}
+.unit-pricing {
+  background: #f0f3e8;
+  border: 1px solid #dce4d0;
+  padding: 14px;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+.unit-pricing .eyebrow {
+  font-size: 9px;
+}
+.pricing-figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+.pricing-figures span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.pricing-figures b {
+  display: block;
+  margin-top: 5px;
+  color: var(--dark);
+  font-size: 19px;
+  font-weight: 550;
+}
+.unit-pricing p {
+  font-size: 11px;
+  line-height: 1.7;
+}
+.unit-pricing .studio-caption {
+  font-size: 10px;
+}
+.pricing-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+.pricing-entry p {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pricing-list button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--dark);
+  text-align: left;
+  padding: 14px 0;
+  font-size: 12px;
+}
+.pricing-list b {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.visit-actions-summary {
+  background: #eef2e5;
+  padding: 11px;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+.visit-actions-summary .eyebrow {
+  font-size: 8px;
+}
+.visit-actions-summary p {
+  font-size: 10px;
+  line-height: 1.6;
+  margin: 5px 0 !important;
+}
+#visit-action-preview p {
+  font-size: 11px;
+  line-height: 1.6;
+}
+@media (max-width: 650px) {
+  .pricing-list button {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .pricing-entry {
+    align-items: flex-start;
+  }
+  .customer-profile .card-heading {
+    flex-wrap: wrap;
+  }
+}

@@ -215,6 +215,8 @@ function createPreviewData() {
     sales_item: itemRows,
     festival_sales: months.map((month) => ({
       id: month,
+      sales: 2800,
+      quantity_sold: 200,
       period_start: month + "-01",
       period_end: month + "-" + (month.endsWith("06") ? "30" : "31"),
     })),
