@@ -1100,8 +1100,11 @@ test("Summary report controls generate each requested period and reject future m
   const app = makeApp();
   try {
     await settled(app);
-    app.run("openSummaryReport()");
+    app.run(
+      "document.getElementById('gm-modal').scrollTop=300; openSummaryReport()",
+    );
     const doc = app.dom.window.document;
+    assert.equal(doc.querySelector("#gm-modal").scrollTop, 0);
     for (const value of ["1", "3", "6", "12", "yoy"]) {
       doc.querySelector(`[data-summary-period="${value}"]`).click();
       assert.ok(doc.querySelector("#summary-paper h1"));
