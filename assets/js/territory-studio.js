@@ -148,6 +148,12 @@ function renderStudioTerritoryDetail() {
   const box = document.getElementById("territory-details"),
     d = territoryDataset;
   if (!d) return;
+  box.setAttribute(
+    "aria-label",
+    selectedZip
+      ? `Locations in ZIP ${selectedZip}`
+      : "Territory and customer details",
+  );
   if (attentionOpen) {
     const signals = territorySignals(d);
     box.innerHTML = `<div class="detail-topline"><span class="eyebrow">BACKED BY YOUR RECORDS</span><button class="btn-sm quiet" data-studio-back>Back to territory</button></div><h2 class="detail-title">What needs attention</h2><p class="studio-caption">Follow-up dates are your commitments. Balance flags use report dates, not invoice due dates.</p><div class="signal-list">${signals.map((s) => `<article><span class="signal-kind">${esc({ followup: "Your action", prospect: "Prospect follow-up", payment: "Payment review", report: "Report freshness", matching: "Customer matching" }[s.type])}</span><h3>${esc(s.title)}</h3><p>${esc(s.evidence)}</p>${s.customer ? `<button class="btn-sm quiet" data-studio-customer="${esc(s.customer)}">Prepare this visit ↗</button>` : s.type === "prospect" ? `<button class="btn-sm quiet" data-edit-prospect="${esc(s.id)}">Open prospect ↗</button>` : `<button class="btn-sm quiet" data-goto="${s.type === "payment" ? "receivables" : s.type === "report" ? "upload" : "data"}">Review records ↗</button>`}</article>`).join("") || '<div class="studio-empty"><b>No follow-ups or review flags today.</b><p>Choose a territory to explore your customer network.</p></div>'}</div>`;
@@ -178,9 +184,31 @@ function renderStudioTerritoryDetail() {
     ),
     isGeo = Object.hasOwn(neighborhoodContext.areas, g.zip);
   const metric = document.getElementById("map-metric").value;
-  box.innerHTML = `<div class="detail-topline"><span class="eyebrow">TERRITORY PROFILE</span><span class="detail-badge">${isGeo ? "NYC ZIP area" : "Outside map coverage"}</span></div><h2>${esc(g.zip)}</h2><p class="nearby-areas">${esc((neighborhoodContext.areas[g.zip] || []).slice(0, 3).join(" / ") || "Neighborhood context unavailable")}</p><div class="detail-stats"><div><small>Sales</small><b>${fmt(g.revenue)}</b></div><div><small>Outstanding</small><b>${fmt(g.outstanding)}</b></div><div><small>Customers / buyers</small><b>${g.customers.length} / ${c.buyers}</b></div><div><small>Prospects</small><b>${prospects.length}</b></div></div>
-    <div class="territory-insight"><span class="eyebrow">${metric === "prospects" ? "EXPANSION CONTEXT" : metric === "outstanding" ? "BEFORE YOU COLLECT" : "TERRITORY HEALTH"}</span><p>${metric === "prospects" ? `${prospects.length} prospects recorded in this ZIP. ${g.customers.length ? `You already have ${g.customers.length} customer relationships here.` : "No listed customers here yet. An empty area does not establish demand."}` : metric === "outstanding" ? "Balances reflect the latest imported snapshot and payments logged afterward. Check the snapshot date and any payment review flags before following up." : c.share === null ? "No sales are attributed to listed customers here in loaded reports. This does not establish that these stores are inactive." : `${esc(c.highest.store_name)} accounts for ${c.share.toFixed(1)}% of this ZIP’s listed-customer sales. ${c.buyers === 1 ? "All attributed revenue comes from one buyer." : `${c.buyers} customers have sales in the loaded reports.`}`}</p>${ranked.some((s) => s.has_estimated_sales) ? `<p><b>Includes a provisional owner estimate.</b> Customer sales and concentration depend on this split.</p>` : ""}${c.share !== null && metric === "revenue" ? `<div class="concentration-bar" role="img" aria-label="Largest buyer accounts for ${c.share.toFixed(1)} percent of this ZIP's sales"><i style="width:${c.share}%"></i></div>` : ""}</div>
-    <div class="detail-list-heading"><h3>${metric === "prospects" ? "Prospects in this area" : "Your customers"}</h3><span>${metric === "prospects" ? prospects.length : ranked.length}</span></div><div class="territory-customers">${metric === "prospects" ? prospects.map((p) => `<button data-edit-prospect="${esc(p.id)}"><span>${esc(p.business_name)}<small>${esc(stageLabel(p.stage))}</small></span><span>↗</span></button>`).join("") || '<p class="empty-note">Add a business you’ve researched or visited to start developing this area.</p>' : ranked.map((s) => `<button data-studio-customer="${esc(s.store_name)}"><span>${esc(s.store_name)}<small>${esc(s.category || "Customer")} · ${invoiceDescription(s)}${s.has_estimated_sales ? " · Provisional sales" : ""}</small></span><span>${fmt(s.total_revenue)}<small>${Number(s.outstanding_balance) > 0 ? `${fmt(s.outstanding_balance)} outstanding` : "No open balance"}</small></span></button>`).join("") || '<p class="empty-note">No listed customers in this ZIP. You can still record prospects and plan an expansion.</p>'}</div><div class="detail-action-row"><button class="btn-sm" data-studio-action="prospect" data-zip="${esc(g.zip)}">Add a prospect</button><button class="btn-sm quiet" data-plan-zip="${esc(g.zip)}">Plan this area ↗</button></div><p class="map-note">Buyers have sales in loaded reports; this is not a live activity measure. Neighborhood names are approximate nearby context. Square sales remain separate from the map.</p>`;
+  const allLocations = d.storeData.filter(
+    (s) => (s.zip || "Unassigned") === g.zip,
+  );
+  const filterLabel = activeBusinessType
+    ? businessTypeOptions(d).find(([key]) => key === activeBusinessType)?.[1] ||
+      "Selected business type"
+    : "";
+  const health =
+    metric === "prospects"
+      ? `${prospects.length} prospects recorded here. ${g.customers.length ? `You have ${g.customers.length} listed customer relationships in this ZIP.` : "No matching customers on file. An empty area does not establish demand."}`
+      : metric === "outstanding"
+        ? "Balances reflect the latest imported snapshot and payments logged afterward. Check the snapshot date and any payment review flags before following up."
+        : c.share === null
+          ? "No sales are attributed to these customers in loaded reports. This does not establish that the stores are inactive."
+          : `${c.highest.store_name} accounts for ${c.share.toFixed(1)}% of this ZIP’s listed-customer sales. ${c.buyers} ${c.buyers === 1 ? "customer has" : "customers have"} sales in the loaded reports.`;
+  box.innerHTML = `<div class="detail-topline"><span class="eyebrow">LOCATIONS IN THIS AREA</span><button class="btn-sm quiet return-to-map" data-return-map>Back to map ↑</button></div>
+    <div class="territory-location-title"><h2>ZIP ${esc(g.zip)}</h2><span class="location-count">${ranked.length} ${ranked.length === 1 ? "location" : "locations"}</span></div>
+    <p class="nearby-areas">${esc((neighborhoodContext.areas[g.zip] || []).slice(0, 3).join(" / ") || (isGeo ? "NYC ZIP area" : "Outside map coverage"))}</p>
+    ${activeBusinessType ? `<div class="territory-filter-note"><span>${esc(filterLabel)} · Showing ${ranked.length} of ${allLocations.length} locations on file</span><button class="btn-sm quiet" data-clear-territory-filter>Show all types</button></div>` : ""}
+    <div class="location-totals"><div><small>Listed sales${ranked.some((s) => s.has_estimated_sales) ? " including estimate" : ""}</small><b>${fmt(g.revenue)}</b></div><div><small>Outstanding</small><b>${fmt(g.outstanding)}</b></div></div>
+    <div class="detail-list-heading"><h3>Your locations</h3><span>Choose one to open</span></div>
+    <div class="territory-customers" aria-label="Customers in ZIP ${esc(g.zip)}">${ranked.map((s) => `<button data-studio-customer="${esc(s.store_name)}"><span>${esc(s.store_name)}<small>${esc(s.category || "Customer")}${s.has_estimated_sales ? " · Provisional sales" : ""}</small></span><span>${fmt(s.total_revenue)}<small>${Number(s.outstanding_balance) > 0 ? `${fmt(s.outstanding_balance)} outstanding` : "No open balance"}</small></span></button>`).join("") || `<div class="studio-empty compact"><b>${allLocations.length && activeBusinessType ? "No locations match this business type." : "No customer locations on file in this ZIP."}</b><p>${allLocations.length && activeBusinessType ? "Choose Show all types to see the other businesses here." : "Add a prospect to start developing this area."}</p></div>`}</div>
+    <details class="studio-disclosure territory-health"${metric === "outstanding" ? " open" : ""}><summary>Area insights & report context</summary><div class="territory-insight"><p>${esc(health)}</p>${ranked.some((s) => s.has_estimated_sales) ? "<p><b>Includes a provisional owner estimate.</b> Customer sales and concentration depend on this split.</p>" : ""}${c.share !== null && metric === "revenue" ? `<div class="concentration-bar" role="img" aria-label="Largest buyer accounts for ${c.share.toFixed(1)} percent of this ZIP's sales"><i style="width:${c.share}%"></i></div>` : ""}<p>Buyers have sales in loaded reports; this is not a live activity measure. Neighborhood names are approximate context. Square sales remain separate from the map.</p></div></details>
+    ${prospects.length || metric === "prospects" ? `<div class="detail-list-heading"><h3>Prospects in this area</h3><span>${prospects.length}</span></div><div class="territory-customers">${prospects.map((p) => `<button data-edit-prospect="${esc(p.id)}"><span>${esc(p.business_name)}<small>${esc(stageLabel(p.stage))}</small></span><span>↗</span></button>`).join("") || '<p class="empty-note">No prospects recorded here yet.</p>'}</div>` : ""}
+    <div class="detail-action-row"><button class="btn-sm" data-studio-action="prospect" data-zip="${esc(g.zip)}">Add a prospect</button><button class="btn-sm quiet" data-plan-zip="${esc(g.zip)}">Plan this area ↗</button></div>`;
 }
 function renderTerritoryCustomer(s, d, box) {
   const raw = d.stores.find((r) => r.store_name === s.store_name) || {};
@@ -543,7 +571,14 @@ document.addEventListener("click", async (e) => {
     attentionOpen = true;
     selectedTerritoryCustomer = null;
     renderTerritoryDetail();
+    revealTerritoryDetails();
   }
+  if (e.target.closest("[data-clear-territory-filter]"))
+    setBusinessTypeFilter("", selectedZip);
+  if (e.target.closest("[data-return-map]"))
+    document
+      .getElementById("territory-map")
+      .scrollIntoView({ block: "start", behavior: "instant" });
   if (e.target.closest("[data-studio-back]")) {
     attentionOpen = false;
     selectedTerritoryCustomer = null;

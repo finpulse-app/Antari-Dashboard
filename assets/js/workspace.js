@@ -23,7 +23,7 @@ const viewInfo = {
   routes: ["Delivery routes", "Your customer network, organized for the road."],
   zips: [
     "Territory insights",
-    "Explore your footprint. Prepare your next conversation. Plan your next move.",
+    "Your locations, relationships, and next opportunities. Start with the map.",
   ],
   data: [
     "Data confidence",

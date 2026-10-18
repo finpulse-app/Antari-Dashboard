@@ -175,9 +175,18 @@ async function renderTerritories(d) {
               iconSize: [55, 22],
               iconAnchor: [27, 11],
             }),
-            interactive: false,
-            keyboard: false,
+            interactive: true,
+            keyboard: true,
+            title: `View locations in ZIP ${zip}`,
+            alt: `View locations in ZIP ${zip}`,
           }).addTo(territoryLabels);
+          marker.on("click", () => selectTerritory(zip));
+          marker.getElement()?.addEventListener("keydown", (e) => {
+            if (e.key === " ") {
+              e.preventDefault();
+              selectTerritory(zip);
+            }
+          });
           territoryLabelMarkers.set(zip, marker);
         }
       },
@@ -256,6 +265,12 @@ function selectTerritory(zip) {
   renderZipPills();
   if (territoryLayer) territoryLayer.setStyle(territoryStyle);
   updateMapLabels();
+  revealTerritoryDetails();
+}
+function revealTerritoryDetails() {
+  const box = document.getElementById("territory-details");
+  if (window.innerWidth <= 750)
+    box.scrollIntoView({ block: "start", behavior: "instant" });
 }
 function renderZipPills() {
   const q = (document.getElementById("territory-search")?.value || "")
@@ -295,6 +310,7 @@ function renderZipPills() {
 function renderTerritoryDetail() {
   if (typeof renderStudioTerritoryDetail === "function")
     renderStudioTerritoryDetail();
+  document.getElementById("territory-details").scrollTop = 0;
 }
 document.getElementById("territory-zip-list").addEventListener("click", (e) => {
   const button = e.target.closest("[data-territory]");
@@ -320,11 +336,29 @@ document.getElementById("map-fit").addEventListener("click", fitTerritories);
 function updateMapLabels() {
   if (!territoryMap) return;
   const occupied = [];
-  for (const [zip, marker] of territoryLabelMarkers)
-    if (territoryMap.getZoom() >= 12.2 || zip === selectedZip) {
-      const point = territoryMap.latLngToContainerPoint(marker.getLatLng());
-      occupied.push({ x: point.x, y: point.y, w: 70, h: 34 });
-    }
+  // Keep every listed ZIP reachable at the overview zoom; separate nearby badges.
+  for (const [zip, marker] of [...territoryLabelMarkers].sort(
+    ([a], [b]) => Number(b === selectedZip) - Number(a === selectedZip),
+  )) {
+    const element = marker.getElement();
+    if (!element) continue;
+    const point = territoryMap.latLngToContainerPoint(marker.getLatLng());
+    const offset =
+      [0, -22, 22, -44, 44].find(
+        (dy) =>
+          !occupied.some(
+            (p) =>
+              Math.abs(p.x - point.x) < 49 && Math.abs(p.y - point.y - dy) < 22,
+          ),
+      ) ?? 0;
+    element.style.marginTop = `${-11 + offset}px`;
+    element.classList.toggle("selected", zip === selectedZip);
+    element.setAttribute("role", "button");
+    element.setAttribute("aria-label", `View locations in ZIP ${zip}`);
+    element.setAttribute("aria-pressed", String(zip === selectedZip));
+    element.setAttribute("aria-controls", "territory-details");
+    occupied.push({ x: point.x, y: point.y + offset, w: 55, h: 24 });
+  }
   for (const item of contextLabelMarkers) {
     const el = item.marker.getElement();
     if (!el) continue;
@@ -340,13 +374,6 @@ function updateMapLabels() {
       );
     el.style.display = show ? "" : "none";
     if (show) occupied.push({ x: point.x, y: point.y, w: 150, h: 26 });
-  }
-
-  for (const [zip, marker] of territoryLabelMarkers) {
-    const element = marker.getElement();
-    if (element)
-      element.style.display =
-        territoryMap.getZoom() >= 12.2 || zip === selectedZip ? "" : "none";
   }
 }
 

@@ -5,14 +5,14 @@ body[data-view="zips"] .period-pill {
   display: none;
 }
 body[data-view="zips"] .page-heading {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .studio-tabs {
   display: flex;
   gap: 7px;
   border-bottom: 1px solid var(--line);
   padding-bottom: 14px;
-  margin-bottom: 22px;
+  margin-bottom: 16px;
   overflow: auto;
 }
 .studio-tabs button {
@@ -50,7 +50,7 @@ body[data-view="zips"] .page-heading {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 20px;
-  margin: 0 0 24px;
+  margin: 24px 0;
 }
 .studio-scorecard > div {
   border-left: 1px solid #d5d9ce;
@@ -90,6 +90,97 @@ body[data-view="zips"] .page-heading {
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
+}
+.map-intro {
+  padding: 15px 18px 0;
+}
+.map-intro .eyebrow {
+  font-size: 9px;
+}
+.map-intro p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 5px 0 0;
+}
+.territory-location-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 9px 0 5px;
+}
+#panel-zips .territory-details .territory-location-title h2 {
+  font-size: 29px;
+  margin: 0;
+}
+.location-count {
+  background: #e9eee2;
+  color: #355746;
+  border-radius: 20px;
+  padding: 5px 9px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.location-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  margin: 12px 0 15px;
+  border-block: 1px solid var(--line);
+}
+.location-totals small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-bottom: 4px;
+}
+.location-totals b {
+  font-size: 18px;
+  font-weight: 550;
+}
+.territory-filter-note {
+  background: #edf1e4;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 10px;
+  color: #576b49;
+  margin-top: 12px;
+}
+.territory-filter-note .btn-sm {
+  display: block;
+  font-size: 10px;
+  padding: 3px 0;
+}
+.territory-health {
+  margin-top: 16px;
+}
+.territory-health .territory-insight {
+  margin-top: 10px !important;
+}
+.return-to-map {
+  display: none;
+}
+#panel-zips .territory-details {
+  scroll-margin-top: 85px;
+  overflow-anchor: none;
+}
+.territory-label.leaflet-interactive {
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+.territory-label span {
+  font-size: 9px;
+  padding: 3px 5px;
+}
+.territory-label.selected span {
+  background: #294e40;
+  color: #fffdf4;
+  border-color: #b58a40;
+}
+.territory-label:focus-visible span {
+  outline: 2px solid #b58a40;
+  outline-offset: 3px;
 }
 .map-lenses {
   display: flex;
@@ -138,6 +229,7 @@ body[data-view="zips"] .page-heading {
 }
 #territory-map {
   height: 540px;
+  scroll-margin-top: 85px;
 }
 #panel-zips .territory-details {
   border: 0;
@@ -1127,6 +1219,12 @@ body[data-view="zips"] .page-heading {
   }
 }
 @media (max-width: 750px) {
+  .return-to-map {
+    display: inline-block;
+  }
+  .map-intro {
+    padding: 12px 12px 0;
+  }
   #panel-zips .territory-layout {
     grid-template-columns: 1fr;
   }

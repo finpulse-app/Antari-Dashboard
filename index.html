@@ -285,8 +285,16 @@
             </button>
           </nav>
           <section id="studio-explore" class="studio-view">
-            <div id="territory-scorecard" class="studio-scorecard"></div>
             <div class="map-workbench">
+              <div class="map-intro">
+                <div>
+                  <span class="eyebrow">YOUR CUSTOMER FOOTPRINT</span>
+                  <p>
+                    Click a ZIP to see its locations. Choose a business to
+                    prepare your next visit.
+                  </p>
+                </div>
+              </div>
               <div class="map-controls">
                 <div class="map-lenses" role="group" aria-label="Map insight">
                   <button
@@ -353,6 +361,7 @@
                   class="territory-details"
                   aria-label="Territory and customer details"
                   aria-live="polite"
+                  tabindex="-1"
                 ></aside>
               </div>
               <div class="territory-footer">
@@ -371,6 +380,7 @@
                 aria-label="Choose a ZIP territory"
               ></div>
             </div>
+            <div id="territory-scorecard" class="studio-scorecard"></div>
             <div
               id="map-coverage"
               class="map-coverage"

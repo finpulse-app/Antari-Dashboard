@@ -89,15 +89,19 @@ function clearBusinessTypeFilter() {
     status.hidden = true;
   }
 }
-document.addEventListener("change", (e) => {
-  if (!e.target.matches("[data-business-type-filter]") || !D) return;
-  activeBusinessType = e.target.value;
-  selectedZip = null;
+function setBusinessTypeFilter(value, zip = null) {
+  if (!D) return;
+  activeBusinessType = value;
+  selectedZip = zip;
   selectedTerritoryCustomer = null;
   attentionOpen = false;
   renderBusinessTypeControls(D);
   renderDirectory();
   renderTerritoryStudio(D);
-  if (territoryMap) territoryMap._antariFitted = false;
+  if (territoryMap && !zip) territoryMap._antariFitted = false;
   renderTerritories(D);
+}
+document.addEventListener("change", (e) => {
+  if (!e.target.matches("[data-business-type-filter]")) return;
+  setBusinessTypeFilter(e.target.value);
 });

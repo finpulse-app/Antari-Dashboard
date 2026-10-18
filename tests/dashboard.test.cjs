@@ -920,6 +920,86 @@ test("business category options group grocery aliases and signout clears the sha
   }
 });
 
+test("selecting a ZIP shows its locations first and resets the previous customer and scroll position", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(`territoryDataset=D; for(const [zip,g] of territoryStats(D)) territoryGroups.set(zip,g);
+      selectedTerritoryCustomer='Orchard Fine Foods'; attentionOpen=true;
+      document.getElementById('territory-details').scrollTop=300; selectTerritory('11235');`);
+    const doc = app.dom.window.document;
+    const box = doc.querySelector("#territory-details");
+    assert.equal(box.scrollTop, 0);
+    assert.equal(box.getAttribute("aria-label"), "Locations in ZIP 11235");
+    assert.equal(app.run("selectedTerritoryCustomer"), null);
+    assert.equal(app.run("attentionOpen"), false);
+    assert.match(
+      box.querySelector(".location-count").textContent,
+      /1 location/,
+    );
+    const customer = box.querySelector('[data-studio-customer="Cedar Market"]');
+    assert.ok(customer);
+    assert.ok(
+      customer.compareDocumentPosition(box.querySelector(".territory-health")) &
+        4,
+    );
+    assert.ok(
+      doc
+        .querySelector(".map-workbench")
+        .compareDocumentPosition(doc.querySelector("#territory-scorecard")) & 4,
+    );
+    customer.click();
+    assert.match(box.textContent, /Write a visit note/);
+    box.scrollTop = 250;
+    box.querySelector("[data-studio-back]").click();
+    assert.equal(box.scrollTop, 0);
+    assert.ok(box.querySelector('[data-studio-customer="Cedar Market"]'));
+    app.run("selectTerritory('11231')");
+    assert.match(box.textContent, /No customer locations on file/);
+    assert.equal(box.querySelectorAll("[data-studio-customer]").length, 0);
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("the opportunities lens retains customer locations and lists prospects separately", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    app.run(`D.prospects=[{id:'p1',zip:'11235',business_name:'Example Prospect',stage:'sampled',archived:false}];
+      territoryDataset=D; for(const [zip,g] of territoryStats(D)) territoryGroups.set(zip,g); selectTerritory('11235');`);
+    app.dom.window.document
+      .querySelector('[data-map-lens="prospects"]')
+      .click();
+    const box = app.dom.window.document.querySelector("#territory-details");
+    assert.ok(box.querySelector('[data-studio-customer="Cedar Market"]'));
+    assert.ok(box.querySelector('[data-edit-prospect="p1"]'));
+  } finally {
+    app.dom.window.close();
+  }
+});
+test("a ZIP hidden by a business filter explains the missing locations and can clear the filter without changing ZIP", async () => {
+  const app = makeApp();
+  try {
+    await settled(app);
+    const total = app.run("D.wholesale+D.direct");
+    app.run(`activeBusinessType='restaurant'; territoryDataset=D;
+      for(const [zip,g] of territoryStats(D)) territoryGroups.set(zip,g); selectTerritory('11235');`);
+    const box = app.dom.window.document.querySelector("#territory-details");
+    assert.match(box.textContent, /Showing 0 of 1 locations on file/);
+    assert.match(box.textContent, /No locations match this business type/);
+    box.querySelector("[data-clear-territory-filter]").click();
+    assert.equal(app.run("activeBusinessType"), "");
+    assert.equal(app.run("selectedZip"), "11235");
+    assert.equal(
+      app.dom.window.document.querySelector("#map-business-type").value,
+      "",
+    );
+    assert.equal(app.run("D.wholesale+D.direct"), total);
+  } finally {
+    app.dom.window.close();
+  }
+});
+
 test("production build versions every entry-page asset by its file contents", async () => {
   const { spawnSync } = require("node:child_process");
   const { createHash } = require("node:crypto");
